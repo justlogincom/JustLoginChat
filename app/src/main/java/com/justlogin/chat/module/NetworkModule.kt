@@ -1,5 +1,6 @@
 package com.justlogin.chat.module
 
+import com.justlogin.chat.common.Consts
 import com.justlogin.chat.data.ChatAPI
 import com.justlogin.chat.data.preference.AuthManagement
 import dagger.Module
@@ -45,7 +46,7 @@ class NetworkModule {
             val token = getTokenFromSomewhere(authManagement)
             if (token != null) {
                 request = request.newBuilder()
-                    .header("Authorization", "Bearer $token")
+                    .header(Consts.AUTHORIZATION, "Bearer $token")
                     .build()
             }
             chain.proceed(request)

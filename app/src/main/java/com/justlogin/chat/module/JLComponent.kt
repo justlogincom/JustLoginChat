@@ -4,12 +4,20 @@ import android.app.Application
 import androidx.lifecycle.ViewModelProvider
 import com.justlogin.chat.JLChatSDK
 import com.justlogin.chat.ui.ChatRoomActivity
+import com.justlogin.chat.ui.ChatRoomViewmodel
 import dagger.BindsInstance
 import dagger.Component
 import javax.inject.Singleton
 
 @Singleton
-@Component(modules = [SharedPreferencesModule::class, NetworkModule::class, ContextModule::class, ViewModelModule::class, CoroutinesModule::class])
+@Component(
+    modules = [SharedPreferencesModule::class,
+        NetworkModule::class,
+        ContextModule::class,
+        ViewModelModule::class,
+        CoroutinesModule::class,
+        DataModule::class]
+)
 interface JLComponent {
 
     @Component.Builder
@@ -22,4 +30,5 @@ interface JLComponent {
 
     fun inject(app: JLChatSDK)
     fun inject(chatRoomActivity: ChatRoomActivity)
+    fun inject(chatViewmodel: ChatRoomViewmodel)
 }

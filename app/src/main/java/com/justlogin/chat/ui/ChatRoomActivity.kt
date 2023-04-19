@@ -16,6 +16,7 @@ import androidx.compose.material.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.justlogin.chat.domain.*
 import com.justlogin.chat.module.ViewModelFactory
 import javax.inject.Inject
 
