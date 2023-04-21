@@ -16,7 +16,8 @@ import javax.inject.Singleton
         ContextModule::class,
         ViewModelModule::class,
         CoroutinesModule::class,
-        DataModule::class]
+        DataModule::class,
+        DomainModule::class]
 )
 interface JLComponent {
 

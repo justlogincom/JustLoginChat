@@ -3,16 +3,26 @@ package com.justlogin.chat.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.justlogin.chat.data.parameter.CreateChatMemberRequest
+import com.justlogin.chat.data.parameter.SendMessageRequest
+import com.justlogin.chat.data.parameter.UpdateReadStatusRequest
+import com.justlogin.chat.data.parameter.User
+import com.justlogin.chat.data.preference.AuthManagement
 import com.justlogin.chat.data.response.LeaveChatResponse
 import com.justlogin.chat.domain.*
 import com.justlogin.chat.module.annnotate.IoDispatcher
 import com.justlogin.chat.ui.mvi.*
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
+@OptIn(FlowPreview::class)
 class ChatRoomViewmodel @Inject constructor(
+    val authManagement: AuthManagement,
     invokeCreateRoom: CreateRoomChat,
     invokeDeleteMessage: DeleteMessage,
     invokeGetMessages: GetMessages,
@@ -30,15 +40,19 @@ class ChatRoomViewmodel @Inject constructor(
                 is ChatResult.CreateRoom.Error -> {
                     _viewEffect.emit(ChatViewEffect.ShowFailedFetch(message = "Failed to get Conversation"))
                 }
+
                 is ChatResult.SendMessage.Error -> {
                     _viewEffect.emit(ChatViewEffect.ShowRetrySend(message = "Failed to send Message"))
                 }
+
                 is ChatResult.DeleteMessage.Error -> {
                     _viewEffect.emit(ChatViewEffect.ShowDeleteAt(messageId = ""))
                 }
+
                 is ChatResult.UpdateMessage.Error -> {
                     _viewEffect.emit(ChatViewEffect.UpdateMessageAt(messageId = ""))
                 }
+
                 else -> {
 
                 }
@@ -55,16 +69,24 @@ class ChatRoomViewmodel @Inject constructor(
     val uiState = _uiState.asStateFlow()
 
     fun sendMessage(
-
-    ){
+        message: String,
+        user: User,
+        companyGUID: String,
+        reportId: String,
+    ) {
         viewModelScope.launch {
             intentFlow.emit(
                 ChatIntent.SendMessage(
-                    compa
+                    companyGUID,
+                    reportId,
+                    SendMessageRequest(
+                        message, user
+                    )
                 )
             )
         }
     }
+
     fun getAllData(
         companyGUID: String,
         reportId: String,
@@ -91,6 +113,14 @@ class ChatRoomViewmodel @Inject constructor(
     private val intentToAction = { flow: Flow<ChatIntent> ->
         flow.map { intent ->
             when (intent) {
+                is ChatIntent.ReadMessage -> {
+                    ChatAction.ReadMessage(
+                        intent.companyGUID,
+                        intent.reportId,
+                        intent.request
+                    )
+                }
+
                 is ChatIntent.InitialLoad -> {
                     ChatAction.FetchInitialData(
                         intent.companyGUID,
@@ -100,6 +130,7 @@ class ChatRoomViewmodel @Inject constructor(
                         intent.request
                     )
                 }
+
                 is ChatIntent.RefreshPage -> ChatAction.RefreshData(
                     intent.companyGUID,
                     intent.reportId,
@@ -107,15 +138,18 @@ class ChatRoomViewmodel @Inject constructor(
                     intent.noOfPage,
                     intent.request
                 )
+
                 is ChatIntent.SendMessage -> ChatAction.SendMessage(
                     intent.companyGuid,
                     intent.reportId,
                     intent.request
                 )
+
                 is ChatIntent.DeleteMessage -> ChatAction.DeleteMessage(
                     intent.reportId,
                     intent.messageId
                 )
+
                 is ChatIntent.EditMessage -> ChatAction.EditMessage(intent.reportId, intent.request)
                 is ChatIntent.UpdateMessage -> ChatAction.UpdateMessage(
                     intent.reportId,
@@ -123,6 +157,21 @@ class ChatRoomViewmodel @Inject constructor(
                 )
             }
         }.filterIsInstance<ChatAction>()
+    }
+
+    private val readMessage = { actionFlow: Flow<ChatAction.ReadMessage> ->
+        actionFlow.flatMapConcat { action ->
+            flow<ChatResult.ReadMessage> {
+                invokeUpdateReadMessages.invoke(
+                    action.companyGUID, action.reportId, action.request
+                )
+                emit(ChatResult.ReadMessage.Success(action.request))
+            }.catch { err ->
+                emit(ChatResult.ReadMessage.Error(error = err))
+            }.onStart {
+                emit(ChatResult.ReadMessage.Loading(LoadType.SHIMMER))
+            }
+        }
     }
 
     private val createMember = { actionFlow: Flow<ChatAction.FetchInitialData> ->
@@ -262,12 +311,14 @@ class ChatRoomViewmodel @Inject constructor(
                                 loadType = LoadType.NONE
                             )
                         }
+
                         is ChatResult.LoadAllUserResult.Loading -> {
                             prevState.copy(
                                 error = null,
                                 loadType = result.loadType
                             )
                         }
+
                         is ChatResult.LoadAllUserResult.Success -> {
                             prevState.copy(
                                 error = null,
@@ -277,81 +328,126 @@ class ChatRoomViewmodel @Inject constructor(
                         }
                     }
                 }
+
                 is ChatResult.CreateRoom.Error ->
                     prevState.copy(
                         error = result.error,
                         loadType = LoadType.NONE,
                         messages = prevState.messages
                     )
+
                 is ChatResult.CreateRoom.Loading ->
                     prevState.copy(
                         error = null,
                         loadType = LoadType.SHIMMER,
                         messages = prevState.messages
                     )
+
                 is ChatResult.CreateRoom.Success ->
                     prevState.copy(
                         error = null,
                         loadType = LoadType.NONE,
                         messages = prevState.messages
                     )
+
                 is ChatResult.DeleteMessage.Error ->
                     prevState.copy(
                         error = result.error,
                         loadType = LoadType.NONE,
                         messages = prevState.messages
                     )
+
                 is ChatResult.DeleteMessage.Loading ->
                     prevState.copy(
                         error = null,
                         loadType = LoadType.SHIMMER,
                         messages = prevState.messages
                     )
+
                 is ChatResult.DeleteMessage.Success ->
                     prevState.copy(
                         error = null,
                         loadType = LoadType.NONE,
                         messages = prevState.messages
                     )
+
                 is ChatResult.SendMessage.Error ->
                     prevState.copy(
                         error = result.error,
                         loadType = LoadType.NONE,
                         messages = prevState.messages
                     )
+
                 is ChatResult.SendMessage.Loading ->
                     prevState.copy(
                         error = null,
                         loadType = LoadType.SHIMMER,
                         messages = prevState.messages
                     )
+
                 is ChatResult.SendMessage.Success ->
                     prevState.copy(
                         error = null,
                         loadType = LoadType.NONE,
                         messages = prevState.messages
                     )
+
                 is ChatResult.UpdateMessage.Error ->
                     prevState.copy(
                         error = result.error,
                         loadType = LoadType.NONE,
                         messages = prevState.messages
                     )
+
                 is ChatResult.UpdateMessage.Loading ->
                     prevState.copy(
                         error = null,
                         loadType = LoadType.SHIMMER,
                         messages = prevState.messages
                     )
+
                 is ChatResult.UpdateMessage.Success ->
                     prevState.copy(
                         error = null,
                         loadType = LoadType.NONE,
                         messages = prevState.messages
                     )
+
+                is ChatResult.ReadMessage.Error -> prevState.copy(
+                    error = result.error,
+                    loadType = LoadType.SHIMMER,
+                    messages = prevState.messages
+                )
+
+                is ChatResult.ReadMessage.Loading -> prevState.copy(
+                    error = null,
+                    loadType = result.loadType,
+                    messages = prevState.messages
+                )
+
+                is ChatResult.ReadMessage.Success -> prevState.copy(
+                    error = null,
+                    loadType = LoadType.NONE,
+                    messages = prevState.messages,
+                    readMessageStatusUpdated = result.request.messageIds
+                )
             }
         }
     }
+
+
+    fun updateReadMessage(companyGUID: String,reportId: String,request: UpdateReadStatusRequest) {
+        viewModelScope.launch {
+            intentFlow.emit(ChatIntent.ReadMessage(companyGUID,reportId,request))
+        }
+    }
+
+    override fun onCleared() {
+        viewModelScope.cancel()
+        super.onCleared()
+    }
+
+    fun getToken() = authManagement.getToken()
 
     init {
         intentFlow

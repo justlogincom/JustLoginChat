@@ -1,9 +1,9 @@
 pluginManagement {
     repositories {
+        mavenLocal()
         google()
         mavenCentral()
         gradlePluginPortal()
-        mavenLocal()
         maven {
             url "https://jitpack.io"
             credentials { username authToken }
@@ -13,9 +13,9 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        mavenLocal()
         google()
         mavenCentral()
-        mavenLocal()
         maven {
             url "https://jitpack.io"
             credentials { username authToken }

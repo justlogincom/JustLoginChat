@@ -1,5 +1,7 @@
 package com.justlogin.chat.module
 
+import com.justlogin.chat.BuildConfig
+import com.justlogin.chat.BuildConfig.BASE_URL
 import com.justlogin.chat.common.Consts
 import com.justlogin.chat.data.ChatAPI
 import com.justlogin.chat.data.preference.AuthManagement
@@ -26,7 +28,7 @@ class NetworkModule {
     @Singleton
     fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
         return Retrofit.Builder()
-            .baseUrl("https://app.justlogin.com")
+            .baseUrl(BASE_URL)
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()

@@ -8,8 +8,9 @@ import com.justlogin.chat.data.parameter.UpdateReadStatusRequest
 import com.justlogin.chat.data.response.ChattedUserResponse
 import com.justlogin.chat.data.response.CreateChatResponse
 import com.justlogin.chat.data.response.LeaveChatResponse
+import javax.inject.Inject
 
-class ChatRepositoryImpl(val api: ChatAPI) : ChatRepository {
+class ChatRepositoryImpl @Inject constructor(val api: ChatAPI) : ChatRepository {
     override suspend fun getMessages(
         companyGUID: String,
         reportId: String,

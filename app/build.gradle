@@ -1,7 +1,8 @@
 plugins {
-    id 'com.android.application'
+    id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
     id 'kotlin-kapt'
+    id 'maven-publish'
 }
 
 android {
@@ -9,7 +10,6 @@ android {
     compileSdk 33
 
     defaultConfig {
-        applicationId "com.justlogin.chat"
         minSdk 22
         targetSdk 33
         versionCode 1
@@ -22,6 +22,10 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            buildConfigField "String", "BASE_URL", '"https://expense.justlogin.com/api/"'
+        }
+        debug {
+            buildConfigField "String", "BASE_URL", '"https://mobile-expense.justlogin.com/"'
         }
     }
     buildFeatures {
@@ -63,4 +67,66 @@ dependencies {
     implementation "androidx.compose.runtime:runtime-livedata:1.2.0"
     implementation 'androidx.activity:activity-compose:1.7.0'
     implementation 'androidx.activity:activity-ktx:1.2.0'
+    implementation "androidx.constraintlayout:constraintlayout-compose:1.0.1"
+    implementation 'com.jakewharton.timber:timber:5.0.1'
+}
+
+task sourceJar(type: Jar) {
+    from android.sourceSets.main.java.srcDirs
+    classifier "sources"
+}
+
+def LIBRARY_GROUP = "com.justlogin"
+def LIBRARY_ARTIFACT_ID = "chat"
+def LIBRARY_VERSION_NAME = "1.0.0"
+project.afterEvaluate {
+    publishToMavenLocal {
+        def groupId = LIBRARY_GROUP
+        def artifactId = LIBRARY_ARTIFACT_ID
+        def versionName = LIBRARY_VERSION_NAME + "-local"
+        def debugSuffix = "-debug"
+        def releaseSuffix = "-release"
+        publishing {
+            publications {
+                LibraryRelease(MavenPublication) {
+                    from components.release
+                    artifact(sourceJar)
+                    setGroupId groupId
+                    setArtifactId artifactId
+                    version versionName + releaseSuffix
+                }
+                LibraryDebug(MavenPublication) {
+                    from components.debug
+                    artifact(sourceJar)
+                    setGroupId groupId
+                    setArtifactId artifactId
+                    version versionName + debugSuffix
+                }
+            }
+            publications.all {
+                pom.withXml {
+                    asNode().dependencies.'*'
+                            .findAll() {
+                                it.scope.text() == 'runtime' &&
+                                        project.configurations.implementation.allDependencies.find {
+                                            dep -> dep.name == it.artifactId.text()
+                                        }
+                            }.each { it.scope*.value = 'compile'}
+                }
+            }
+        }
+
+        doLast {
+            def prettyPrint = {
+                1.upto(100, { print "=" })
+                println()
+            }
+            println()
+            prettyPrint()
+            println "PUBLICATION FINISHED"
+            println "Artifact RELEASE: " + groupId + ":" + artifactId +  ":" + versionName + releaseSuffix
+            println "Artifact DEBUG: " + groupId + ":" + artifactId +  ":" + versionName + debugSuffix
+            prettyPrint()
+        }
+    }
 }
