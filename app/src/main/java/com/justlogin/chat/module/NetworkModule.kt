@@ -5,6 +5,7 @@ import com.justlogin.chat.BuildConfig.BASE_URL
 import com.justlogin.chat.common.Consts
 import com.justlogin.chat.data.ChatAPI
 import com.justlogin.chat.data.preference.AuthManagement
+import com.justlogin.chat.module.annnotate.AppScope
 import dagger.Module
 import dagger.Provides
 import okhttp3.Interceptor
@@ -16,16 +17,16 @@ import javax.inject.Singleton
 @Module
 class NetworkModule {
 
+    @AppScope
     @Provides
-    @Singleton
     fun provideOkHttpClient(interceptor: Interceptor): OkHttpClient {
         return OkHttpClient.Builder()
             .addInterceptor(interceptor)
             .build()
     }
 
+    @AppScope
     @Provides
-    @Singleton
     fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
         return Retrofit.Builder()
             .baseUrl(BASE_URL)
@@ -34,14 +35,14 @@ class NetworkModule {
             .build()
     }
 
+    @AppScope
     @Provides
-    @Singleton
     fun provideChatAPI(retrofit: Retrofit) : ChatAPI{
         return retrofit.create(ChatAPI::class.java)
     }
 
+    @AppScope
     @Provides
-    @Singleton
     fun provideInterceptor(authManagement: AuthManagement): Interceptor {
         return Interceptor { chain ->
             var request = chain.request()

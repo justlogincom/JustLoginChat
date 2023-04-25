@@ -5,6 +5,7 @@ import android.content.Context
 import android.util.Log
 import com.justlogin.chat.data.preference.AuthManagement
 import com.justlogin.chat.module.DaggerJLComponent
+import com.justlogin.chat.module.JLComponent
 import timber.log.Timber
 import timber.log.Timber.Forest.plant
 import javax.inject.Inject
@@ -12,6 +13,8 @@ import javax.inject.Inject
 
 class JLChatSDK() {
 
+    protected var theme : Int? = null
+    lateinit var component: JLComponent
     private var isDebugable: Boolean = false
     protected lateinit var application: Application
 
@@ -27,9 +30,25 @@ class JLChatSDK() {
         isDebugable = flag
     }
 
+    companion object {
+        private lateinit var INSTANCE: JLChatSDK
+
+        @JvmStatic
+        fun getInstance(): JLChatSDK {
+            if (!::INSTANCE.isInitialized) {
+                INSTANCE = JLChatSDK()
+            }
+            return INSTANCE
+        }
+    }
+
     fun initSDK(application: Application) {
         this.application = application
-        DaggerJLComponent.builder().application(application).build()
+        theme?.let {resource ->
+            application.setTheme(resource)
+        }
+        component = DaggerJLComponent.builder().application(this.application).build()
+        component.inject(this)
         if (isDebugable) {
             plant(Timber.DebugTree())
         }
@@ -38,6 +57,11 @@ class JLChatSDK() {
         } else {
             Log.e(javaClass.simpleName, "please set token before initialize this SDK")
         }
+    }
+
+
+    fun setThemeColor(themeResource: Int) = apply {
+        this.theme = themeResource
     }
 
     /**
