@@ -13,10 +13,13 @@ import javax.inject.Inject
 
 class JLChatSDK() {
 
-    protected var theme : Int? = null
+    protected var theme: Int? = null
     lateinit var component: JLComponent
     private var isDebugable: Boolean = false
+    private lateinit var SERVER_URL: String
     protected lateinit var application: Application
+
+    fun getServerUrl() = SERVER_URL
 
     @Inject
     protected lateinit var authManagement: AuthManagement
@@ -44,21 +47,32 @@ class JLChatSDK() {
 
     fun initSDK(application: Application) {
         this.application = application
-        theme?.let {resource ->
+        theme?.let { resource ->
             application.setTheme(resource)
         }
-        component = DaggerJLComponent.builder().application(this.application).build()
-        component.inject(this)
         if (isDebugable) {
             plant(Timber.DebugTree())
+        }
+        if (::SERVER_URL.isInitialized.not()) {
+            throw ExceptionInInitializerError("Error Doesn't Have SERVER_URL")
         }
         if (::token.isInitialized) {
             authManagement.saveToken(token)
         } else {
             Log.e(javaClass.simpleName, "please set token before initialize this SDK")
         }
+        component =
+            DaggerJLComponent
+                .builder()
+                .application(this.application)
+                .serverUrl(SERVER_URL)
+                .build()
+        component.inject(this)
     }
 
+    fun setServerURL(url : String) = apply {
+        SERVER_URL = url
+    }
 
     fun setThemeColor(themeResource: Int) = apply {
         this.theme = themeResource

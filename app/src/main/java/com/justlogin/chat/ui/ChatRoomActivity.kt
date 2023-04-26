@@ -1,6 +1,9 @@
 package com.justlogin.chat.ui
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -52,6 +55,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.google.accompanist.themeadapter.appcompat.AppCompatTheme
 import com.justlogin.chat.JLChatSDK
 import com.justlogin.chat.R
+import com.justlogin.chat.data.parameter.ChatParameter
 import com.justlogin.chat.data.parameter.Reader
 import com.justlogin.chat.data.parameter.UpdateReadStatusRequest
 import com.justlogin.chat.data.parameter.User
@@ -71,36 +75,27 @@ class ChatRoomActivity : ComponentActivity() {
     private val viewModel: ChatRoomViewmodel by viewModels { vmFactory }
 
     companion object {
-        const val COMPANY_GUID = "company_guid_extras"
-        const val REPORT_ID = "report_id"
-        const val MEMBER_IDS = "member_ids"
-        const val USER_ID = "user_id"
-        const val USER_FULLNAME = "user_fullname"
+        const val PARAM_DATA = "parameter_data"
         private const val DATA_PER_PAGE = 10
     }
-
     @SuppressLint("UnusedMaterialScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         JLChatSDK.getInstance().component.inject(this)
-
-        val args = intent.extras
-        val (userId, userName) = Reader(
-            args?.getString(USER_ID, null).orEmpty(),
-            args?.getString(USER_FULLNAME, null).orEmpty()
-        )
-        val companyId = args?.getString(COMPANY_GUID, null).orEmpty()
-        val reportId = args?.getString(REPORT_ID, null).orEmpty()
-        val memberIds = args?.getStringArrayList(MEMBER_IDS).orEmpty()
+        val parameterData : ChatParameter? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(PARAM_DATA, ChatParameter::class.java)
+        } else {
+            intent.getParcelableExtra<ChatParameter>(PARAM_DATA)
+        }
         var currentPage = 1
 
         Log.e(
             "Chat SDK",
             "Initialization Chat with \n" +
                     "Token : ${viewModel.getToken()}\n" +
-                    "companyId : $companyId\n" +
-                    "reportId: $reportId\n" +
-                    "memberIds: $memberIds"
+                    "companyId : $parameterData.companyId\n" +
+                    "reportId: $parameterData.reportId\n" +
+                    "memberIds: ${parameterData?.participantsId}"
         )
 
         setContent {
@@ -110,11 +105,11 @@ class ChatRoomActivity : ComponentActivity() {
                     lifecycleScope.launch {
                         repeatOnLifecycle(Lifecycle.State.RESUMED) {
                             viewModel.getAllData(
-                                companyId,
-                                reportId,
+                                parameterData!!.companyId,
+                                parameterData!!.roomId,
                                 currentPage,
                                 DATA_PER_PAGE,
-                                memberIds
+                                parameterData!!.participantsId
                             )
                         }
                     }
@@ -122,10 +117,10 @@ class ChatRoomActivity : ComponentActivity() {
                         repeatOnLifecycle(Lifecycle.State.RESUMED) {
                             while (true) {
                                 viewModel.updateReadMessage(
-                                    companyId, reportId, request = UpdateReadStatusRequest(
+                                    parameterData!!.companyId, parameterData!!.roomId, request = UpdateReadStatusRequest(
                                         messageIds = state.value.messages.map {
                                             it.messageId
-                                        }, read = Reader(userGuid = userId, fullName = userName)
+                                        }, read = Reader(userGuid = parameterData!!.userId, fullName = parameterData!!.userName)
                                     )
                                 )
                                 delay(TimeUnit.SECONDS.toMillis(5))
@@ -154,11 +149,11 @@ class ChatRoomActivity : ComponentActivity() {
 
                             listState.OnBottomReached {
                                 viewModel.getAllData(
-                                    companyId,
-                                    reportId,
+                                    parameterData!!.companyId,
+                                    parameterData.roomId,
                                     currentPage++,
                                     DATA_PER_PAGE,
-                                    memberIds
+                                    parameterData.participantsId
                                 )
                             }
 
@@ -184,7 +179,7 @@ class ChatRoomActivity : ComponentActivity() {
                                         .align(Alignment.CenterVertically),
                                     onClick = {
                                         viewModel.sendMessage(
-                                            rememberText, User(userId, userName), companyId, reportId
+                                            rememberText, User(parameterData!!.userId, parameterData!!.userName), parameterData!!.companyId, parameterData!!.roomId
                                         )
                                     },
                                 ) {
@@ -269,4 +264,9 @@ class ChatRoomActivity : ComponentActivity() {
     fun MessageItem(message: Message) {
         Text(text = message.messageBody)
     }
+
+}
+
+fun Activity.createChatRoomWith(parameter : ChatParameter) = Intent(this,ChatRoomActivity::class.java).apply{
+    this.putExtra(ChatRoomActivity.PARAM_DATA,parameter)
 }

@@ -12,11 +12,16 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import javax.inject.Inject
+import javax.inject.Named
 import javax.inject.Singleton
 
 @Module
 class NetworkModule {
 
+    @Inject
+    @Named("server_url")
+    internal lateinit var SERVER_URL: String
     @AppScope
     @Provides
     fun provideOkHttpClient(interceptor: Interceptor): OkHttpClient {
@@ -29,7 +34,7 @@ class NetworkModule {
     @Provides
     fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
         return Retrofit.Builder()
-            .baseUrl(BASE_URL)
+            .baseUrl(SERVER_URL)
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
