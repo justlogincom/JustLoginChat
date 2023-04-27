@@ -3,52 +3,25 @@ package com.justlogin.chat.ui
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.Button
-import androidx.compose.material.OutlinedTextField
-import androidx.compose.material.Scaffold
-import androidx.compose.material.Text
-import androidx.compose.material.TextField
-import androidx.compose.material.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
+import androidx.compose.material.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.constraintlayout.compose.ConstraintLayout
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -82,20 +55,16 @@ class ChatRoomActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         JLChatSDK.getInstance().component.inject(this)
-        val parameterData : ChatParameter? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            intent.getParcelableExtra(PARAM_DATA, ChatParameter::class.java)
-        } else {
-            intent.getParcelableExtra<ChatParameter>(PARAM_DATA)
-        }
+        val parameterData : ChatParameter? = intent.getParcelableExtra<ChatParameter>(PARAM_DATA)
         var currentPage = 1
 
         Log.e(
             "Chat SDK",
             "Initialization Chat with \n" +
                     "Token : ${viewModel.getToken()}\n" +
-                    "companyId : $parameterData.companyId\n" +
-                    "reportId: $parameterData.reportId\n" +
-                    "memberIds: ${parameterData?.participantsId}"
+                    "companyId : ${parameterData?.getCompanyId()}\n" +
+                    "reportId: ${parameterData?.getRoomId()}\n" +
+                    "memberIds: ${parameterData?.getParticipantsIds()?.joinToString()}"
         )
 
         setContent {
@@ -105,11 +74,11 @@ class ChatRoomActivity : ComponentActivity() {
                     lifecycleScope.launch {
                         repeatOnLifecycle(Lifecycle.State.RESUMED) {
                             viewModel.getAllData(
-                                parameterData!!.companyId,
-                                parameterData!!.roomId,
+                                parameterData!!.getCompanyId(),
+                                parameterData!!.getRoomId(),
                                 currentPage,
                                 DATA_PER_PAGE,
-                                parameterData!!.participantsId
+                                parameterData!!.getParticipantsIds()
                             )
                         }
                     }
@@ -117,10 +86,10 @@ class ChatRoomActivity : ComponentActivity() {
                         repeatOnLifecycle(Lifecycle.State.RESUMED) {
                             while (true) {
                                 viewModel.updateReadMessage(
-                                    parameterData!!.companyId, parameterData!!.roomId, request = UpdateReadStatusRequest(
+                                    parameterData!!.getCompanyId(), parameterData!!.getRoomId(), request = UpdateReadStatusRequest(
                                         messageIds = state.value.messages.map {
                                             it.messageId
-                                        }, read = Reader(userGuid = parameterData!!.userId, fullName = parameterData!!.userName)
+                                        }, read = Reader(userGuid = parameterData!!.getUserId(), fullName = parameterData!!.userName)
                                     )
                                 )
                                 delay(TimeUnit.SECONDS.toMillis(5))
@@ -149,11 +118,11 @@ class ChatRoomActivity : ComponentActivity() {
 
                             listState.OnBottomReached {
                                 viewModel.getAllData(
-                                    parameterData!!.companyId,
-                                    parameterData.roomId,
+                                    parameterData!!.getCompanyId(),
+                                    parameterData.getRoomId(),
                                     currentPage++,
                                     DATA_PER_PAGE,
-                                    parameterData.participantsId
+                                    parameterData.getParticipantsIds()
                                 )
                             }
 
@@ -179,7 +148,7 @@ class ChatRoomActivity : ComponentActivity() {
                                         .align(Alignment.CenterVertically),
                                     onClick = {
                                         viewModel.sendMessage(
-                                            rememberText, User(parameterData!!.userId, parameterData!!.userName), parameterData!!.companyId, parameterData!!.roomId
+                                            rememberText, User(parameterData!!.getUserId(), parameterData!!.userName), parameterData!!.getCompanyId(), parameterData!!.getRoomId()
                                         )
                                     },
                                 ) {

@@ -13,14 +13,14 @@ import retrofit2.http.*
 
 interface ChatAPI {
 
-    @POST("chat/v2/companies/{companyGUID}/members/{transactionId}")
+    @POST("v2/companies/{companyGUID}/members/{transactionId}")
     suspend fun createChatSession(
         @Path("companyGUID") companyGUID: String,
         @Path("transactionId") reportId: String,
         @Body chatMemberRequest: CreateChatMemberRequest
     ): ArrayList<ChattedUserResponse>
 
-    @GET("chat/v1/companies/{companyGUID}/messages/{transactionId}")
+    @GET("v1/companies/{companyGUID}/messages/{transactionId}")
     suspend fun getMessages(
         @Path("companyGUID") companyGUID: String,
         @Path("transactionId") reportId: String,

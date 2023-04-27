@@ -1,7 +1,5 @@
 package com.justlogin.chat.module
 
-import com.justlogin.chat.BuildConfig
-import com.justlogin.chat.BuildConfig.BASE_URL
 import com.justlogin.chat.common.Consts
 import com.justlogin.chat.data.ChatAPI
 import com.justlogin.chat.data.preference.AuthManagement
@@ -10,31 +8,37 @@ import dagger.Module
 import dagger.Provides
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
-import javax.inject.Inject
-import javax.inject.Named
-import javax.inject.Singleton
+import timber.log.Timber
+
 
 @Module
 class NetworkModule {
 
-    @Inject
-    @Named("server_url")
-    internal lateinit var SERVER_URL: String
     @AppScope
     @Provides
-    fun provideOkHttpClient(interceptor: Interceptor): OkHttpClient {
-        return OkHttpClient.Builder()
+    fun provideOkHttpClient(networkConfig: Pair<String,Boolean>,interceptor: Interceptor): OkHttpClient {
+        val client = OkHttpClient.Builder()
             .addInterceptor(interceptor)
+        if (networkConfig.second) {
+            val logging = HttpLoggingInterceptor { message ->
+                Timber.tag("JLChatSDK Network").d(message)
+            }.apply {
+                setLevel(HttpLoggingInterceptor.Level.BODY)
+            }
+            client.addInterceptor(logging)
+        }
+        return client
             .build()
     }
 
     @AppScope
     @Provides
-    fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
+    fun provideRetrofit(okHttpClient: OkHttpClient,networkConfig: Pair<String,Boolean>): Retrofit {
         return Retrofit.Builder()
-            .baseUrl(SERVER_URL)
+            .baseUrl(networkConfig.first)
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
@@ -42,7 +46,7 @@ class NetworkModule {
 
     @AppScope
     @Provides
-    fun provideChatAPI(retrofit: Retrofit) : ChatAPI{
+    fun provideChatAPI(retrofit: Retrofit): ChatAPI {
         return retrofit.create(ChatAPI::class.java)
     }
 

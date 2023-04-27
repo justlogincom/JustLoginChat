@@ -1,7 +1,6 @@
 package com.justlogin.chat
 
 import android.app.Application
-import android.content.Context
 import android.util.Log
 import com.justlogin.chat.data.preference.AuthManagement
 import com.justlogin.chat.module.DaggerJLComponent
@@ -15,11 +14,9 @@ class JLChatSDK() {
 
     protected var theme: Int? = null
     lateinit var component: JLComponent
-    private var isDebugable: Boolean = false
+    protected var isDebugable: Boolean = false
     private lateinit var SERVER_URL: String
     protected lateinit var application: Application
-
-    fun getServerUrl() = SERVER_URL
 
     @Inject
     protected lateinit var authManagement: AuthManagement
@@ -54,20 +51,23 @@ class JLChatSDK() {
             plant(Timber.DebugTree())
         }
         if (::SERVER_URL.isInitialized.not()) {
-            throw ExceptionInInitializerError("Error Doesn't Have SERVER_URL")
+            Log.e(javaClass.simpleName, "Error Doesn't Have SERVER_URL")
         }
+
+        component =
+            DaggerJLComponent
+                .builder()
+                .application(this.application)
+                .serverConfig(SERVER_URL to isDebugable)
+                .build()
+        component.inject(this)
+
         if (::token.isInitialized) {
             authManagement.saveToken(token)
         } else {
             Log.e(javaClass.simpleName, "please set token before initialize this SDK")
         }
-        component =
-            DaggerJLComponent
-                .builder()
-                .application(this.application)
-                .serverUrl(SERVER_URL)
-                .build()
-        component.inject(this)
+
     }
 
     fun setServerURL(url : String) = apply {

@@ -1,15 +1,11 @@
 package com.justlogin.chat.module
 
 import android.app.Application
-import androidx.lifecycle.ViewModelProvider
 import com.justlogin.chat.JLChatSDK
 import com.justlogin.chat.module.annnotate.AppScope
 import com.justlogin.chat.ui.ChatRoomActivity
-import com.justlogin.chat.ui.ChatRoomViewmodel
 import dagger.BindsInstance
 import dagger.Component
-import javax.inject.Named
-import javax.inject.Singleton
 
 @AppScope
 @Component(
@@ -28,7 +24,7 @@ interface JLComponent {
         @BindsInstance
         fun application(application: Application): Builder
         @BindsInstance
-        fun serverUrl(@Named("server_url") serverUrl: String): Builder
+        fun serverConfig(networkConfig: Pair<String,Boolean>): Builder
         fun build(): JLComponent
     }
 
