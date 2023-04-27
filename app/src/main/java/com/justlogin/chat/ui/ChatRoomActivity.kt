@@ -55,13 +55,13 @@ class ChatRoomActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         JLChatSDK.getInstance().component.inject(this)
-        val parameterData : ChatParameter? = intent.getParcelableExtra<ChatParameter>(PARAM_DATA)
+        val parameterData : ChatParameter? = intent.getParcelableExtra(PARAM_DATA)
         var currentPage = 1
 
         Log.e(
             "Chat SDK",
             "Initialization Chat with \n" +
-                    "Token : ${viewModel.getToken()}\n" +
+                    "Token : ${parameterData?.getToken()}\n" +
                     "companyId : ${parameterData?.getCompanyId()}\n" +
                     "reportId: ${parameterData?.getRoomId()}\n" +
                     "memberIds: ${parameterData?.getParticipantsIds()?.joinToString()}"
@@ -75,10 +75,10 @@ class ChatRoomActivity : ComponentActivity() {
                         repeatOnLifecycle(Lifecycle.State.RESUMED) {
                             viewModel.getAllData(
                                 parameterData!!.getCompanyId(),
-                                parameterData!!.getRoomId(),
+                                parameterData.getRoomId(),
                                 currentPage,
                                 DATA_PER_PAGE,
-                                parameterData!!.getParticipantsIds()
+                                parameterData.getParticipantsIds()
                             )
                         }
                     }

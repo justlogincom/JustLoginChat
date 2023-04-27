@@ -6,13 +6,14 @@ import kotlinx.parcelize.Parcelize
 
 @Parcelize
 data class ChatParameter(
-    val token: String,
+    private val token: String,
     private val userId : String,
     val userName : String,
     private val participantsId: List<String>,
     private val companyId : String,
     private val roomId : String
 ):Parcelable {
+    fun getToken() = token.sanitize()
     fun getRoomId() = roomId.sanitize()
     fun getUserId() = userId.sanitize()
 
@@ -23,4 +24,4 @@ data class ChatParameter(
     fun getCompanyId() = companyId.sanitize()
 }
 
-private fun String.sanitize() = this.replace('-',' ').trim().uppercase()
+fun String.sanitize() = this.replace("-","").uppercase()

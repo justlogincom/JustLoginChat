@@ -2,6 +2,7 @@ package com.justlogin.chat
 
 import android.app.Application
 import android.util.Log
+import com.justlogin.chat.data.parameter.sanitize
 import com.justlogin.chat.data.preference.AuthManagement
 import com.justlogin.chat.module.DaggerJLComponent
 import com.justlogin.chat.module.JLComponent
@@ -23,7 +24,7 @@ class JLChatSDK() {
 
     private lateinit var token: String
     fun setToken(token: String) = apply {
-        this.token = token
+        this.token = token.sanitize()
     }
 
     fun enableDebug(flag: Boolean) = apply {
@@ -83,7 +84,7 @@ class JLChatSDK() {
      */
     fun refreshSDKWithNewToken(token: String) {
         apply {
-            this.token = token
+            this.token = token.sanitize()
         }
         if (this::application.isInitialized) {
             initSDK(application)
