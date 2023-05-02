@@ -17,14 +17,21 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.paint
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -64,41 +71,16 @@ class ChatRoomActivity : ComponentActivity() {
 
     private var parameterData: ChatParameter? = null
 
-    @Composable
-    fun SnackbarWithRetry(
-        message: String,
-        retryAction: () -> Unit,
-        snackbarHostState: SnackbarHostState = remember { SnackbarHostState() }
-    ) {
-        SnackbarHost(
-            hostState = snackbarHostState,
-            snackbar = {
-                Snackbar(
-                    content = { Text(message) },
-                    action = {
-                        TextButton(
-                            onClick = {
-                                retryAction.invoke()
-                                snackbarHostState.currentSnackbarData?.dismiss()
-                            }
-                        ) {
-                            Text("Retry")
-                        }
-                    }
-                )
-            }
-        )
-    }
-
 
     @SuppressLint("UnusedMaterialScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         JLChatSDK.getInstance().component.inject(this)
         parameterData = intent.getParcelableExtra(PARAM_DATA)
-        var currentPage = 1
+        var currentPage: Int
         val itemDatas: MutableList<Message> = mutableListOf()
         val set = HashSet<Message>()
+
         Log.e(
             "Chat SDK",
             "Initialization Chat with \n" +
@@ -174,85 +156,94 @@ class ChatRoomActivity : ComponentActivity() {
                         }
                     }
 
-                    jobScheduler(uiState, currentPage)
+//                    jobScheduler(uiState, currentPage)
                 }
-
                 Scaffold(
                     scaffoldState = scaffoldState,
                     topBar = {
-                        TopAppBar(title = { Text("Messages") })
-                    },
-
-                    content = {
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                                state = listState,
-                                reverseLayout = true,
-                                contentPadding = PaddingValues(vertical = 8.dp, horizontal = 16.dp)
-                            ) {
-                                itemsIndexed(itemDatas.reversed()) { index, message ->
-                                    ChatBubble(
-                                        sender = message.user.fullName,
-                                        message = message.messageBody,
-                                        isMine = isMine(message),
-                                        date = message.created,
-                                        isReaded = message.read
-                                    )
+                        TopAppBar(
+                            modifier = Modifier.paint(
+                                painterResource(R.drawable.bg_more),
+                                contentScale = ContentScale.FillBounds
+                            ),
+                            elevation = 0.dp,
+                            title = { Text(text = "Chat", textAlign = TextAlign.Center) },
+                            navigationIcon = {
+                                IconButton(onClick = { finish() }) {
+                                    Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
                                 }
                             }
-
-                            listState.OnBottomReached {
-                                if (uiState.value.isNextPageAvailable) {
-                                    requestData(uiState.value.nextPage)
-                                }
-                            }
-
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                OutlinedTextField(
-                                    value = rememberText,
-                                    onValueChange = { rememberText = it },
-                                    label = { Text("Message") },
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Button(
-                                    modifier = Modifier
-                                        .height(50.dp)
-                                        .padding(start = 8.dp)
-                                        .align(Alignment.CenterVertically),
-                                    enabled = true,
-                                    onClick = {
-                                        viewModel.sendMessage(
-                                            rememberText,
-                                            User(
-                                                parameterData!!.getUserId(),
-                                                parameterData!!.userName
-                                            ),
-                                            parameterData!!.getCompanyId(),
-                                            parameterData!!.getRoomId()
-                                        )
-                                    },
-                                ) {
-                                    Image(
-                                        imageVector = ImageVector.vectorResource(
-                                            R.drawable.ic_send_24
-                                        ), contentDescription = ""
-                                    )
-                                }
-                            }
-                        }
+                        )
                     },
                     snackbarHost = { SnackbarHost(hostState = it) }
-                )
+                ) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            state = listState,
+                            reverseLayout = true,
+                            contentPadding = PaddingValues(vertical = 8.dp, horizontal = 16.dp)
+                        ) {
+                            itemsIndexed(itemDatas.reversed()) { index, message ->
+                                ChatBubble(
+                                    sender = message.user.fullName,
+                                    message = message.messageBody,
+                                    isMine = isMine(message),
+                                    date = message.created,
+                                    isReaded = message.read
+                                )
+                            }
+                        }
+
+                        listState.OnBottomReached {
+                            if (uiState.value.isNextPageAvailable) {
+                                requestData(uiState.value.nextPage)
+                            }
+                        }
+
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = rememberText,
+                                onValueChange = { rememberText = it },
+                                label = { Text("Message") },
+                                modifier = Modifier.weight(1f)
+                            )
+                            Button(
+                                modifier = Modifier
+                                    .height(50.dp)
+                                    .padding(start = 8.dp)
+                                    .align(Alignment.CenterVertically),
+                                enabled = rememberText.isNotBlank(),
+                                onClick = {
+                                    viewModel.sendMessage(
+                                        rememberText,
+                                        User(
+                                            parameterData!!.getUserId(),
+                                            parameterData!!.userName
+                                        ),
+                                        parameterData!!.getCompanyId(),
+                                        parameterData!!.getRoomId()
+                                    )
+                                },
+                            ) {
+                                Image(
+                                    imageVector = ImageVector.vectorResource(
+                                        R.drawable.ic_send_24
+                                    ), contentDescription = ""
+                                )
+                            }
+                        }
+                    }
+                }
             })
         }
     }
@@ -267,6 +258,109 @@ class ChatRoomActivity : ComponentActivity() {
         )
     }
 
+
+    @Preview
+    @Composable
+    fun PreviewIt() {
+        val scaffoldState = rememberScaffoldState()
+        val listState = rememberLazyListState()
+
+        Scaffold(
+            scaffoldState = scaffoldState,
+            topBar = {
+                TopAppBar(
+                    modifier = Modifier
+                        .height(80.dp)
+                        .paint(
+                            painterResource(id = R.drawable.bg_more),
+                            contentScale = ContentScale.Crop,
+                            sizeToIntrinsics = true,
+                            colorFilter = ColorFilter.tint(MaterialTheme.colors.secondary.copy(0.5f),BlendMode.ColorBurn)
+                        ),
+                    backgroundColor = Color.Unspecified,
+                    elevation = 0.dp,
+                    title = { Text(text = "Chat", textAlign = TextAlign.Center) },
+                    navigationIcon = {
+                        IconButton(onClick = { this@ChatRoomActivity.finishAfterTransition() }) {
+                            Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    }
+                )
+            },
+            snackbarHost = { SnackbarHost(hostState = it) }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(it.calculateBottomPadding())
+            ) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    state = listState,
+                    reverseLayout = true,
+                    contentPadding = PaddingValues(vertical = 8.dp, horizontal = 16.dp)
+                ) {
+                    itemsIndexed(listOf("1", "2").reversed()) { index, message ->
+                        ChatBubble(
+                            sender = "message.user.fullName",
+                            message = "message.messageBody",
+                            isMine = true,
+                            date = "message.created",
+                            isReaded = true
+                        )
+                    }
+                }
+
+                listState.OnBottomReached {
+
+                }
+
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+
+                    var rememberText by remember { mutableStateOf("") }
+                    OutlinedTextField(
+                        value = rememberText,
+                        onValueChange = { rememberText = it },
+                        label = { Text("Message") },
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(
+                        modifier = Modifier
+                            .height(50.dp)
+                            .padding(start = 8.dp)
+                            .align(Alignment.CenterVertically),
+                        enabled = rememberText.isNotBlank(),
+                        onClick = {
+                            viewModel.sendMessage(
+                                rememberText,
+                                User(
+                                    parameterData!!.getUserId(),
+                                    parameterData!!.userName
+                                ),
+                                parameterData!!.getCompanyId(),
+                                parameterData!!.getRoomId()
+                            )
+                        },
+                    ) {
+                        Image(
+                            imageVector = ImageVector.vectorResource(
+                                R.drawable.ic_send_24
+                            ), contentDescription = ""
+                        )
+                    }
+                }
+            }
+        }
+    }
 
     private fun jobScheduler(state: State<ChatViewState>, currentPage: Int) {
         lifecycleScope.launch {
@@ -287,7 +381,6 @@ class ChatRoomActivity : ComponentActivity() {
                             )
                         )
                     }
-
                     requestData(currentPage)
                     Timber.e("JLChatSDK: Trying Fetch")
                     delay(TimeUnit.SECONDS.toMillis(5))
@@ -367,11 +460,6 @@ class ChatRoomActivity : ComponentActivity() {
     }
 
     @Composable
-    fun MessageItem(message: Message) {
-        Text(text = message.messageBody)
-    }
-
-    @Composable
     fun ChatBubble(
         sender: String,
         message: String,
@@ -389,7 +477,7 @@ class ChatRoomActivity : ComponentActivity() {
             Card(
                 modifier = Modifier.widthIn(max = 340.dp),
                 shape = createShape(isMine),
-                backgroundColor = MaterialTheme.colors.secondary,
+                backgroundColor = if(isMine) MaterialTheme.colors.primary else MaterialTheme.colors.secondary,
             ) {
                 Column() {
                     Text(
@@ -460,11 +548,11 @@ class ChatRoomActivity : ComponentActivity() {
         }
     }
 
-    fun createShape(mine: Boolean) = RoundedCornerShape(
-        topStart = 8.dp,
-        topEnd = 8.dp,
-        bottomEnd = if (mine) 0.dp else 8.dp,
-        bottomStart = if (mine) 8.dp else 0.dp
+    private fun createShape(mine: Boolean) = RoundedCornerShape(
+        topStart = 16.dp,
+        topEnd = 16.dp,
+        bottomEnd = if (mine) 0.dp else 16.dp,
+        bottomStart = if (mine) 16.dp else 0.dp
     )
 
 }

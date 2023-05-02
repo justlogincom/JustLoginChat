@@ -8,11 +8,11 @@ plugins {
 
 android {
     namespace 'com.justlogin.chat'
-    compileSdk 33
+    compileSdk 31
 
     defaultConfig {
         minSdk 22
-        targetSdk 33
+        targetSdk 31
         versionCode 1
         versionName "1.0"
 

@@ -16,7 +16,6 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.util.Objects
 import javax.inject.Inject
 
 @OptIn(FlowPreview::class)
@@ -198,14 +197,16 @@ class ChatRoomViewmodel @Inject constructor(
                 val result: LeaveChatResponse = invokeGetMessages.invoke(
                     action.companyGUID, action.reportId, action.currentPage, action.noOfPage
                 )
-                val isNextPageAvailable = action.currentPage < result.totalPages
-                val nextPage =
-                    if (isNextPageAvailable) action.currentPage + 1 else action.currentPage
+//                val isNextPageAvailable = action.currentPage < result.totalPages
+//                val nextPage =
+//                    if (isNextPageAvailable) action.currentPage + 1 else action.currentPage
+                val nextPage = action.currentPage + 1
+
                 emit(
                     ChatResult.LoadAllUserResult.Success(
                         messages = result.messages,
                         totalPages = result.totalPages,
-                        isNextPageAvailable = isNextPageAvailable, nextPage = nextPage,
+                        isNextPageAvailable = true, nextPage = nextPage,
                         currentPage = action.currentPage
                     )
                 )
@@ -236,14 +237,15 @@ class ChatRoomViewmodel @Inject constructor(
                 val result: LeaveChatResponse = invokeGetMessages.invoke(
                     action.companyGUID, action.reportId, action.currentPage, action.noOfPage
                 )
-                val isNextPageAvailable = action.currentPage < result.totalPages
-                val nextPage =
-                    if (isNextPageAvailable) action.currentPage + 1 else action.currentPage
+//                val isNextPageAvailable = action.currentPage < result.totalPages
+//                val nextPage =
+//                    if (isNextPageAvailable) action.currentPage + 1 else action.currentPage
+                val nextPage = action.currentPage + 1
                 emit(
                     ChatResult.LoadAllUserResult.Success(
                         messages = result.messages,
                         totalPages = result.totalPages,
-                        isNextPageAvailable = isNextPageAvailable, nextPage = nextPage,
+                        isNextPageAvailable = true, nextPage = nextPage,
                         currentPage = action.currentPage
                     )
                 )
@@ -297,23 +299,13 @@ class ChatRoomViewmodel @Inject constructor(
                 SharingStarted.Eagerly
             )
 
-        val readMessageAction = incomingFlow
-            .filterIsInstance<ChatAction.ReadMessage>()
-            .shareIn(
-                viewModelScope,
-                SharingStarted.Eagerly
-            )
-
 
         val createMemberFlow = fetchInitial.let(createMember)
         val fetchMessagesFlow = fetchInitial.let(fetchMessages)
 
-        val refreshMessageFlow =
-            sharedFlow
-                .filterIsInstance<ChatAction.RefreshData>()
-                .let(refreshMessage)
         merge(
-            readMessageAction
+            incomingFlow
+                .filterIsInstance<ChatAction.ReadMessage>()
                 .let(readMessage),
             createMemberFlow
                 .flatMapMerge { fetchMessagesFlow },
@@ -326,7 +318,9 @@ class ChatRoomViewmodel @Inject constructor(
             sharedFlow
                 .filterIsInstance<ChatAction.UpdateMessage>()
                 .let(updateMessage),
-            refreshMessageFlow
+            sharedFlow
+                .filterIsInstance<ChatAction.RefreshData>()
+                .let(refreshMessage)
         ).filterIsInstance<ChatResult>()
     }
 
@@ -481,9 +475,6 @@ class ChatRoomViewmodel @Inject constructor(
         viewModelScope.cancel()
         super.onCleared()
     }
-
-    fun getToken() = authManagement.getToken()
-
     init {
         intentFlow
             .let(intentFilter)
@@ -491,7 +482,6 @@ class ChatRoomViewmodel @Inject constructor(
             .let(actionProcessor)
             .onEach(::viewEffect)
             .let(reducer)
-            .take(1)
             .onEach { newState ->
                 _uiState.value = newState
             }
