@@ -105,7 +105,14 @@ sealed class ChatResult {
 
     sealed class LoadAllUserResult : ChatResult() {
         data class Loading(val loadType: LoadType) : LoadAllUserResult()
-        data class Success(val messages: List<Message>, val totalPages: Int) : LoadAllUserResult()
+        data class Success(
+            val currentPage: Int,
+            val messages: List<Message>,
+            val totalPages: Int,
+            val isNextPageAvailable: Boolean,
+            val nextPage: Int
+        ) : LoadAllUserResult()
+
         data class Error(val error: Throwable) : LoadAllUserResult()
     }
 
@@ -132,10 +139,12 @@ sealed class ChatResult {
 enum class LoadType {
     PULL_TO_REFRESH,
     SHIMMER,
-    NONE
+    NONE,
+    SEND
 }
 
 sealed class ChatViewEffect {
+    object RefreshMessageList : ChatViewEffect()
     data class ShowRetrySend(val message: String) : ChatViewEffect()
     data class ShowDeleteAt(val messageId: String) : ChatViewEffect()
     data class ShowFailedFetch(val message: String) : ChatViewEffect()
@@ -146,12 +155,22 @@ data class ChatViewState(
     val isInitial: Boolean,
     val messages: List<Message>,
     val loadType: LoadType,
+    val nextPage: Int,
+    val currentPage: Int,
+    val isNextPageAvailable: Boolean,
     val readMessageStatusUpdated: List<String>,
     val error: Throwable?,
 ) {
     companion object {
         fun initialState() = ChatViewState(
-            true, listOf(), LoadType.SHIMMER, listOf(), null
+            isInitial = true,
+            messages = listOf(),
+            loadType = LoadType.SHIMMER,
+            nextPage = 1,
+            currentPage = 1,
+            isNextPageAvailable = true,
+            readMessageStatusUpdated = listOf(),
+            error = null
         )
     }
 }

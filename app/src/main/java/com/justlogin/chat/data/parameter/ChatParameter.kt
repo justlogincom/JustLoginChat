@@ -13,7 +13,7 @@ data class ChatParameter(
     private val companyId : String,
     private val roomId : String
 ):Parcelable {
-    fun getToken() = token.sanitize()
+    fun getToken() = token
     fun getRoomId() = roomId.sanitize()
     fun getUserId() = userId.sanitize()
 
