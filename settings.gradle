@@ -6,7 +6,6 @@ pluginManagement {
         gradlePluginPortal()
         maven {
             url "https://jitpack.io"
-            credentials { username authToken }
         }
     }
 }
@@ -18,7 +17,6 @@ dependencyResolutionManagement {
         mavenCentral()
         maven {
             url "https://jitpack.io"
-            credentials { username authToken }
         }
     }
 }
