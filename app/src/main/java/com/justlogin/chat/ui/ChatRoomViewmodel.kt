@@ -90,6 +90,7 @@ class ChatRoomViewmodel @Inject constructor(
     }
 
     fun getAllData(
+        isInitialLoad : Boolean,
         companyGUID: String,
         reportId: String,
         currentPage: Int,
@@ -99,6 +100,7 @@ class ChatRoomViewmodel @Inject constructor(
         viewModelScope.launch {
             intentFlow.emit(
                 ChatIntent.InitialLoad(
+                    isInitial = isInitialLoad,
                     companyGUID = companyGUID,
                     reportId = reportId,
                     currentPage = currentPage,
@@ -126,6 +128,7 @@ class ChatRoomViewmodel @Inject constructor(
 
                 is ChatIntent.InitialLoad -> {
                     ChatAction.FetchInitialData(
+                        intent.isInitial,
                         intent.companyGUID,
                         intent.reportId,
                         intent.currentPage,
@@ -135,6 +138,7 @@ class ChatRoomViewmodel @Inject constructor(
                 }
 
                 is ChatIntent.RefreshPage -> ChatAction.RefreshData(
+                    true,
                     intent.companyGUID,
                     intent.reportId,
                     intent.currentPage,
@@ -197,16 +201,16 @@ class ChatRoomViewmodel @Inject constructor(
                 val result: LeaveChatResponse = invokeGetMessages.invoke(
                     action.companyGUID, action.reportId, action.currentPage, action.noOfPage
                 )
-//                val isNextPageAvailable = action.currentPage < result.totalPages
-//                val nextPage =
-//                    if (isNextPageAvailable) action.currentPage + 1 else action.currentPage
-                val nextPage = action.currentPage + 1
+                val isNextPageAvailable = action.currentPage < result.totalPages
+                val nextPage =
+                    if (isNextPageAvailable) action.currentPage + 1 else action.currentPage
 
                 emit(
                     ChatResult.LoadAllUserResult.Success(
+                        isInitial = action.isInitial,
                         messages = result.messages,
                         totalPages = result.totalPages,
-                        isNextPageAvailable = true, nextPage = nextPage,
+                        isNextPageAvailable = isNextPageAvailable, nextPage = nextPage,
                         currentPage = action.currentPage
                     )
                 )
@@ -237,15 +241,15 @@ class ChatRoomViewmodel @Inject constructor(
                 val result: LeaveChatResponse = invokeGetMessages.invoke(
                     action.companyGUID, action.reportId, action.currentPage, action.noOfPage
                 )
-//                val isNextPageAvailable = action.currentPage < result.totalPages
-//                val nextPage =
-//                    if (isNextPageAvailable) action.currentPage + 1 else action.currentPage
-                val nextPage = action.currentPage + 1
+                val isNextPageAvailable = action.currentPage < result.totalPages
+                val nextPage =
+                    if (isNextPageAvailable) action.currentPage + 1 else action.currentPage
                 emit(
                     ChatResult.LoadAllUserResult.Success(
+                        isInitial = action.isInitial,
                         messages = result.messages,
                         totalPages = result.totalPages,
-                        isNextPageAvailable = true, nextPage = nextPage,
+                        isNextPageAvailable = isNextPageAvailable, nextPage = nextPage,
                         currentPage = action.currentPage
                     )
                 )
@@ -300,15 +304,12 @@ class ChatRoomViewmodel @Inject constructor(
             )
 
 
-        val createMemberFlow = fetchInitial.let(createMember)
-        val fetchMessagesFlow = fetchInitial.let(fetchMessages)
-
         merge(
             incomingFlow
                 .filterIsInstance<ChatAction.ReadMessage>()
                 .let(readMessage),
-            createMemberFlow
-                .flatMapMerge { fetchMessagesFlow },
+            fetchInitial.let(createMember),
+            fetchInitial.let(fetchMessages),
             sharedFlow
                 .filterIsInstance<ChatAction.SendMessage>()
                 .let(sendMessage),
@@ -346,7 +347,7 @@ class ChatRoomViewmodel @Inject constructor(
 
                         is ChatResult.LoadAllUserResult.Success -> {
                             prevState.copy(
-                                isInitial = result.currentPage == 1,
+                                isInitial = result.isInitial,
                                 error = null,
                                 loadType = LoadType.NONE,
                                 messages = result.messages,

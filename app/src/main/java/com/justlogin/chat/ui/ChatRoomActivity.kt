@@ -3,12 +3,17 @@ package com.justlogin.chat.ui
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.annotation.RequiresApi
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -50,10 +55,14 @@ import com.justlogin.chat.domain.*
 import com.justlogin.chat.module.ViewModelFactory
 import com.justlogin.chat.ui.mvi.ChatViewEffect
 import com.justlogin.chat.ui.mvi.ChatViewState
+import com.justlogin.chat.ui.mvi.LoadType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
@@ -80,7 +89,6 @@ class ChatRoomActivity : ComponentActivity() {
         var currentPage: Int
         val itemDatas: MutableList<Message> = mutableListOf()
         val set = HashSet<Message>()
-
         Log.e(
             "Chat SDK",
             "Initialization Chat with \n" +
@@ -96,6 +104,7 @@ class ChatRoomActivity : ComponentActivity() {
                 val scaffoldState = rememberScaffoldState()
                 val context = LocalContext.current
                 var rememberText by remember { mutableStateOf("") }
+                var isSending by remember { mutableStateOf(false) }
                 val listState = rememberLazyListState()
                 val uiState = viewModel.uiState.collectAsState()
 
@@ -108,18 +117,21 @@ class ChatRoomActivity : ComponentActivity() {
                 currentPage = uiState.value.currentPage
 
 
-                LaunchedEffect(key1 = true) {
-                    //initial state get all data
+                Timber.e("bambang redraw")
+                //initial state get all data
+                LaunchedEffect(key1 = true, block = {
                     lifecycleScope.launch {
-                        repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                            requestData(currentPage)
-                        }
+                        Timber.e("bambang initial called")
+                        requestData(true, currentPage)
                     }
+                })
 
+                LaunchedEffect(key1 = true, block = {
                     lifecycleScope.launch {
                         viewModel.viewEffect.collectLatest {
                             when (it) {
                                 is ChatViewEffect.ShowRetrySend -> {
+                                    isSending = false
                                     val result = scaffoldState.snackbarHostState.showSnackbar(
                                         message = "Error: ${it.message}",
                                         actionLabel = "Retry",
@@ -128,6 +140,7 @@ class ChatRoomActivity : ComponentActivity() {
                                     when (result) {
                                         SnackbarResult.Dismissed -> {}
                                         SnackbarResult.ActionPerformed -> {
+                                            isSending = true
                                             viewModel.sendMessage(
                                                 rememberText,
                                                 User(
@@ -142,8 +155,9 @@ class ChatRoomActivity : ComponentActivity() {
                                 }
 
                                 ChatViewEffect.RefreshMessageList -> {
+                                    isSending = false
                                     rememberText = ""
-                                    requestData(currentPage)
+                                    requestData(false, currentPage)
                                 }
 
                                 is ChatViewEffect.ShowDeleteAt -> {}
@@ -155,9 +169,11 @@ class ChatRoomActivity : ComponentActivity() {
                             }
                         }
                     }
+                })
+                LaunchedEffect(key1 = true, block = {
+                    jobScheduler(uiState, currentPage)
+                })
 
-//                    jobScheduler(uiState, currentPage)
-                }
                 Scaffold(
                     scaffoldState = scaffoldState,
                     topBar = {
@@ -178,28 +194,43 @@ class ChatRoomActivity : ComponentActivity() {
                     snackbarHost = { SnackbarHost(hostState = it) }
                 ) {
                     Column(modifier = Modifier.fillMaxSize()) {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                            state = listState,
-                            reverseLayout = true,
-                            contentPadding = PaddingValues(vertical = 8.dp, horizontal = 16.dp)
-                        ) {
-                            itemsIndexed(itemDatas.reversed()) { index, message ->
-                                ChatBubble(
-                                    sender = message.user.fullName,
-                                    message = message.messageBody,
-                                    isMine = isMine(message),
-                                    date = message.created,
-                                    isReaded = message.read
+                        if (uiState.value.isInitial && uiState.value.loadType != LoadType.NONE) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                            ) {
+                                CircularProgressIndicator(
+                                    color = MaterialTheme.colors.secondary
                                 )
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                state = listState,
+                                reverseLayout = true,
+                                contentPadding = PaddingValues(vertical = 8.dp, horizontal = 16.dp)
+                            ) {
+                                itemsIndexed(itemDatas.sortedByDescending {
+                                    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").parse(it.created)
+                                }) { index, message ->
+                                    ChatBubble(
+                                        sender = message.user.fullName,
+                                        message = message.messageBody,
+                                        isMine = isMine(message),
+                                        date = message.created,
+                                        isReaded = message.read
+                                    )
+                                }
                             }
                         }
 
                         listState.OnBottomReached {
                             if (uiState.value.isNextPageAvailable) {
-                                requestData(uiState.value.nextPage)
+                                requestData(false, uiState.value.nextPage)
                             }
                         }
 
@@ -222,8 +253,9 @@ class ChatRoomActivity : ComponentActivity() {
                                     .height(50.dp)
                                     .padding(start = 8.dp)
                                     .align(Alignment.CenterVertically),
-                                enabled = rememberText.isNotBlank(),
+                                enabled = rememberText.isNotBlank() && !isSending,
                                 onClick = {
+                                    isSending = true
                                     viewModel.sendMessage(
                                         rememberText,
                                         User(
@@ -235,11 +267,18 @@ class ChatRoomActivity : ComponentActivity() {
                                     )
                                 },
                             ) {
-                                Image(
-                                    imageVector = ImageVector.vectorResource(
-                                        R.drawable.ic_send_24
-                                    ), contentDescription = ""
-                                )
+                                if (isSending) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        color = MaterialTheme.colors.secondary
+                                    )
+                                } else {
+                                    Image(
+                                        imageVector = ImageVector.vectorResource(
+                                            R.drawable.ic_send_24
+                                        ), contentDescription = ""
+                                    )
+                                }
                             }
                         }
                     }
@@ -248,8 +287,9 @@ class ChatRoomActivity : ComponentActivity() {
         }
     }
 
-    private fun requestData(page: Int) {
+    private fun requestData(isInitialLoad: Boolean, page: Int) {
         viewModel.getAllData(
+            isInitialLoad,
             parameterData!!.getCompanyId(),
             parameterData!!.getRoomId(),
             page,
@@ -275,7 +315,10 @@ class ChatRoomActivity : ComponentActivity() {
                             painterResource(id = R.drawable.bg_more),
                             contentScale = ContentScale.Crop,
                             sizeToIntrinsics = true,
-                            colorFilter = ColorFilter.tint(MaterialTheme.colors.secondary.copy(0.5f),BlendMode.ColorBurn)
+                            colorFilter = ColorFilter.tint(
+                                MaterialTheme.colors.secondary.copy(0.5f),
+                                BlendMode.ColorBurn
+                            )
                         ),
                     backgroundColor = Color.Unspecified,
                     elevation = 0.dp,
@@ -294,21 +337,35 @@ class ChatRoomActivity : ComponentActivity() {
                     .fillMaxSize()
                     .padding(it.calculateBottomPadding())
             ) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    state = listState,
-                    reverseLayout = true,
-                    contentPadding = PaddingValues(vertical = 8.dp, horizontal = 16.dp)
-                ) {
-                    itemsIndexed(listOf("1", "2").reversed()) { index, message ->
-                        ChatBubble(
-                            sender = "message.user.fullName",
-                            message = "message.messageBody",
-                            isMine = true,
-                            date = "message.created",
-                            isReaded = true
+                val containData = false
+                if (containData) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        state = listState,
+                        reverseLayout = true,
+                        contentPadding = PaddingValues(vertical = 8.dp, horizontal = 16.dp)
+                    ) {
+                        itemsIndexed(listOf("1", "2").reversed()) { index, message ->
+                            ChatBubble(
+                                sender = "message.user.fullName",
+                                message = "message.messageBody",
+                                isMine = true,
+                                date = "message.created",
+                                isReaded = true
+                            )
+                        }
+                    }
+                } else {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colors.secondary
                         )
                     }
                 }
@@ -351,11 +408,26 @@ class ChatRoomActivity : ComponentActivity() {
                             )
                         },
                     ) {
-                        Image(
-                            imageVector = ImageVector.vectorResource(
-                                R.drawable.ic_send_24
-                            ), contentDescription = ""
-                        )
+                        var showing by remember { mutableStateOf(false) }
+                        AnimatedVisibility(
+                            modifier = Modifier.size(24.dp),
+                            visible = showing,
+                            enter = fadeIn(),
+                            exit = fadeOut()
+                        ) {
+                            CircularProgressIndicator(color = Color.White)
+                        }
+                        AnimatedVisibility(
+                            visible = showing.not(),
+                            enter = fadeIn(),
+                            exit = fadeOut()
+                        ) {
+                            Image(
+                                imageVector = ImageVector.vectorResource(
+                                    R.drawable.ic_send_24
+                                ), contentDescription = ""
+                            )
+                        }
                     }
                 }
             }
@@ -366,14 +438,17 @@ class ChatRoomActivity : ComponentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 while (true) {
-                    if (state.value.messages.isNotEmpty()) {
+                    val data = state.value.messages.filter {
+                        it.user.userGuid != parameterData!!.getUserId()
+                    }.map {
+                        it.messageId
+                    }
+                    if (data.isNotEmpty()) {
                         viewModel.updateReadMessage(
                             parameterData!!.getCompanyId(),
                             parameterData!!.getRoomId(),
                             request = UpdateReadStatusRequest(
-                                messageIds = state.value.messages.map {
-                                    it.messageId
-                                },
+                                messageIds = data,
                                 read = Reader(
                                     userGuid = parameterData!!.getUserId(),
                                     fullName = parameterData!!.userName
@@ -381,7 +456,7 @@ class ChatRoomActivity : ComponentActivity() {
                             )
                         )
                     }
-                    requestData(currentPage)
+                    requestData(false, currentPage)
                     Timber.e("JLChatSDK: Trying Fetch")
                     delay(TimeUnit.SECONDS.toMillis(5))
                 }
@@ -477,7 +552,7 @@ class ChatRoomActivity : ComponentActivity() {
             Card(
                 modifier = Modifier.widthIn(max = 340.dp),
                 shape = createShape(isMine),
-                backgroundColor = if(isMine) MaterialTheme.colors.primary else MaterialTheme.colors.secondary,
+                backgroundColor = if (isMine) MaterialTheme.colors.primary else MaterialTheme.colors.secondary,
             ) {
                 Column() {
                     Text(

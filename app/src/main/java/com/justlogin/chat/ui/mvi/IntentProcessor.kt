@@ -9,6 +9,7 @@ import com.justlogin.chat.data.response.Message
 
 sealed class ChatIntent {
     data class InitialLoad(
+        val isInitial: Boolean,
         val companyGUID: String,
         val reportId: String,
         val currentPage: Int,
@@ -56,6 +57,7 @@ sealed class ChatAction {
     ) : ChatAction()
 
     data class FetchInitialData(
+        val isInitial: Boolean,
         val companyGUID: String,
         val reportId: String,
         val currentPage: Int,
@@ -64,6 +66,7 @@ sealed class ChatAction {
     ) : ChatAction()
 
     data class RefreshData(
+        val isInitial: Boolean,
         val companyGUID: String,
         val reportId: String,
         val currentPage: Int,
@@ -106,6 +109,7 @@ sealed class ChatResult {
     sealed class LoadAllUserResult : ChatResult() {
         data class Loading(val loadType: LoadType) : LoadAllUserResult()
         data class Success(
+            val isInitial: Boolean,
             val currentPage: Int,
             val messages: List<Message>,
             val totalPages: Int,
