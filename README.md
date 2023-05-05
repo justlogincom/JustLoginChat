@@ -1,4 +1,5 @@
 # JustLoginChat
+[![](https://jitpack.io/v/justlogincom/JustLoginChat.svg)](https://jitpack.io/#justlogincom/JustLoginChat) </br>
 This is Chat SDK for Android App
 
 
