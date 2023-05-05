@@ -2,6 +2,7 @@ package com.justlogin.chat.module
 
 import android.app.Application
 import com.justlogin.chat.JLChatSDK
+import com.justlogin.chat.data.parameter.AuthParameter
 import com.justlogin.chat.module.annnotate.AppScope
 import com.justlogin.chat.ui.ChatRoomActivity
 import dagger.BindsInstance
@@ -22,6 +23,8 @@ interface JLComponent {
     @Component.Builder
     interface Builder {
         @BindsInstance
+        fun authenticator(application: AuthParameter): Builder
+        @BindsInstance
         fun application(application: Application): Builder
         @BindsInstance
         fun serverConfig(networkConfig: Pair<String,Boolean>): Builder
@@ -30,4 +33,5 @@ interface JLComponent {
 
     fun inject(app: JLChatSDK)
     fun inject(chatRoomActivity: ChatRoomActivity)
+
 }

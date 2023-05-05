@@ -13,14 +13,14 @@ import retrofit2.http.*
 
 interface ChatAPI {
 
-    @POST("v2/companies/{companyGUID}/members/{transactionId}")
+    @POST("chat/v2/companies/{companyGUID}/members/{transactionId}")
     suspend fun createChatSession(
         @Path("companyGUID") companyGUID: String,
         @Path("transactionId") reportId: String,
         @Body chatMemberRequest: CreateChatMemberRequest
     ): ArrayList<ChattedUserResponse>
 
-    @GET("v1/companies/{companyGUID}/messages/{transactionId}")
+    @GET("chat/v1/companies/{companyGUID}/messages/{transactionId}")
     suspend fun getMessages(
         @Path("companyGUID") companyGUID: String,
         @Path("transactionId") reportId: String,
@@ -28,27 +28,27 @@ interface ChatAPI {
         @Query(Consts.NO_OF_RECORDS) noOfRecords: Int
     ): LeaveChatResponse
 
-    @POST("v1/companies/{companyGUID}/messages/{transactionId}")
+    @POST("chat/v1/companies/{companyGUID}/messages/{transactionId}")
     suspend fun sendMessages(
         @Path("companyGUID") companyGUID: String,
         @Path("transactionId") reportId: String,
         @Body request: SendMessageRequest
     ): CreateChatResponse
 
-    @PUT("v1/messages/{reportID}")
+    @PUT("chat/v1/messages/{reportID}")
     suspend fun updateMessage(
         @Path("reportID") reportID: String,
         @Body request: UpdateMessageRequest
     ): Response<Unit>
 
-    @PUT("v1/companies/{companyGUID}/messages")
+    @PUT("chat/v1/companies/{companyGUID}/messages")
     suspend fun updateReadMessage(
         @Path("companyGUID") companyGUID: String,
         @Query("transactionid") reportId: String,
         @Body request: UpdateReadStatusRequest
     ): Response<Unit>
 
-    @PUT("v1/messages")
+    @PUT("chat/v1/messages")
     suspend fun deleteMessage(
         @Query("transactionid") reportId: String,
         @Query("messageid") messageid: String

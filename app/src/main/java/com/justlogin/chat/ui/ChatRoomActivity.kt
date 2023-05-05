@@ -3,30 +3,61 @@ package com.justlogin.chat.ui
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.*
+import androidx.compose.material.Button
+import androidx.compose.material.Card
+import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.Icon
+import androidx.compose.material.IconButton
+import androidx.compose.material.MaterialTheme
+import androidx.compose.material.OutlinedTextField
+import androidx.compose.material.Scaffold
+import androidx.compose.material.SnackbarDuration
+import androidx.compose.material.SnackbarHost
+import androidx.compose.material.SnackbarResult
+import androidx.compose.material.Text
+import androidx.compose.material.TopAppBar
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.runtime.*
+import androidx.compose.material.rememberScaffoldState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.paint
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
@@ -40,38 +71,32 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
 import com.google.accompanist.themeadapter.appcompat.AppCompatTheme
 import com.justlogin.chat.JLChatSDK
 import com.justlogin.chat.R
 import com.justlogin.chat.data.parameter.ChatParameter
-import com.justlogin.chat.data.parameter.Reader
-import com.justlogin.chat.data.parameter.UpdateReadStatusRequest
 import com.justlogin.chat.data.parameter.User
 import com.justlogin.chat.data.response.Message
-import com.justlogin.chat.domain.*
 import com.justlogin.chat.module.ViewModelFactory
 import com.justlogin.chat.ui.mvi.ChatViewEffect
-import com.justlogin.chat.ui.mvi.ChatViewState
+import com.justlogin.chat.ui.mvi.ErrorType
 import com.justlogin.chat.ui.mvi.LoadType
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.text.SimpleDateFormat
-import java.time.Instant
-import java.time.format.DateTimeFormatter
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 class ChatRoomActivity : ComponentActivity() {
+
+    private val datePattern: String = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
 
     @Inject
     lateinit var vmFactory: ViewModelFactory
 
     private val viewModel: ChatRoomViewmodel by viewModels { vmFactory }
+    private var currentPage: Int = 1
+    private val itemDatas: MutableList<Message> = mutableListOf()
+    private val set = HashSet<Message>()
 
     companion object {
         const val PARAM_DATA = "parameter_data"
@@ -81,18 +106,15 @@ class ChatRoomActivity : ComponentActivity() {
     private var parameterData: ChatParameter? = null
 
 
-    @SuppressLint("UnusedMaterialScaffoldPaddingParameter")
+    @SuppressLint("UnusedMaterialScaffoldPaddingParameter", "BinaryOperationInTimber")
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
         JLChatSDK.getInstance().component.inject(this)
+        super.onCreate(savedInstanceState)
         parameterData = intent.getParcelableExtra(PARAM_DATA)
-        var currentPage: Int
-        val itemDatas: MutableList<Message> = mutableListOf()
-        val set = HashSet<Message>()
-        Log.e(
-            "Chat SDK",
+        Timber.tag("Chat SDK").e(
             "Initialization Chat with \n" +
-                    "Token : ${parameterData?.getToken()}\n" +
+                    "Token : ${viewModel.getToken()}\n" +
+                    "Refresh Token : ${viewModel.getRefreshToken()}\n" +
                     "companyId : ${parameterData?.getCompanyId()}\n" +
                     "reportId: ${parameterData?.getRoomId()}\n" +
                     "memberIds: ${parameterData?.getParticipantsIds()?.joinToString()}"
@@ -104,10 +126,9 @@ class ChatRoomActivity : ComponentActivity() {
                 val scaffoldState = rememberScaffoldState()
                 val context = LocalContext.current
                 var rememberText by remember { mutableStateOf("") }
-                var isSending by remember { mutableStateOf(false) }
                 val listState = rememberLazyListState()
                 val uiState = viewModel.uiState.collectAsState()
-
+                val coroutineScope = rememberCoroutineScope()
                 for (message in uiState.value.messages) {
                     if (set.add(message)) {
                         itemDatas.add(message)
@@ -116,63 +137,75 @@ class ChatRoomActivity : ComponentActivity() {
 
                 currentPage = uiState.value.currentPage
 
+                LaunchedEffect(key1 = true, block = {
+                    viewModel.startAutoFetching(
+                        parameterData!!.getCompanyId(),
+                        parameterData!!.getRoomId(),
+                        DATA_PER_PAGE,
+                        parameterData!!.getParticipantsIds()
+                    )
+                })
 
-                Timber.e("bambang redraw")
                 //initial state get all data
                 LaunchedEffect(key1 = true, block = {
-                    lifecycleScope.launch {
-                        Timber.e("bambang initial called")
+                    coroutineScope.launch {
                         requestData(true, currentPage)
                     }
                 })
 
-                LaunchedEffect(key1 = true, block = {
-                    lifecycleScope.launch {
-                        viewModel.viewEffect.collectLatest {
-                            when (it) {
-                                is ChatViewEffect.ShowRetrySend -> {
-                                    isSending = false
-                                    val result = scaffoldState.snackbarHostState.showSnackbar(
-                                        message = "Error: ${it.message}",
-                                        actionLabel = "Retry",
-                                        duration = SnackbarDuration.Short
-                                    )
-                                    when (result) {
-                                        SnackbarResult.Dismissed -> {}
-                                        SnackbarResult.ActionPerformed -> {
-                                            isSending = true
-                                            viewModel.sendMessage(
-                                                rememberText,
-                                                User(
-                                                    parameterData!!.getUserId(),
-                                                    parameterData!!.userName
-                                                ),
-                                                parameterData!!.getCompanyId(),
-                                                parameterData!!.getRoomId()
-                                            )
-                                        }
+                val viewEffect = viewModel.viewEffect.collectAsState(initial = null)
+                when (val effect = viewEffect.value) {
+                    ChatViewEffect.RefreshMessageList -> {
+                        refreshChat(currentPage)
+                        //scroll to bottom
+                    }
+
+                    is ChatViewEffect.ShowFailedFetch -> {
+                        Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
+                    }
+
+                    else -> {}
+                }
+
+                when (val error = uiState.value.error) {
+                    is ErrorType.CommonError -> {
+                        Toast.makeText(context, error.error?.message, Toast.LENGTH_SHORT).show()
+                    }
+
+                    is ErrorType.MessageFail -> {
+                        LaunchedEffect(key1 = uiState.value, block = {
+                            coroutineScope.launch {
+                                val result = scaffoldState.snackbarHostState.showSnackbar(
+                                    message = "Error: ${error.error?.message}",
+                                    actionLabel = "Retry",
+                                    duration = SnackbarDuration.Indefinite
+                                )
+
+                                when (result) {
+                                    SnackbarResult.Dismissed -> {}
+                                    SnackbarResult.ActionPerformed -> {
+                                        viewModel.sendMessage(
+                                            rememberText,
+                                            User(
+                                                parameterData!!.getUserId(),
+                                                parameterData!!.userName
+                                            ),
+                                            parameterData!!.getCompanyId(),
+                                            parameterData!!.getRoomId()
+                                        )
                                     }
                                 }
-
-                                ChatViewEffect.RefreshMessageList -> {
-                                    isSending = false
-                                    rememberText = ""
-                                    requestData(false, currentPage)
-                                }
-
-                                is ChatViewEffect.ShowDeleteAt -> {}
-                                is ChatViewEffect.ShowFailedFetch -> {
-                                    Toast.makeText(context, it.message, Toast.LENGTH_SHORT).show()
-                                }
-
-                                is ChatViewEffect.UpdateMessageAt -> {}
                             }
+                        })
+                    }
+
+                    else -> {
+                        if (error == null && uiState.value.loadType == LoadType.NONE) {
+                            rememberText = ""
                         }
                     }
-                })
-                LaunchedEffect(key1 = true, block = {
-                    jobScheduler(uiState, currentPage)
-                })
+                }
+
 
                 Scaffold(
                     scaffoldState = scaffoldState,
@@ -194,42 +227,61 @@ class ChatRoomActivity : ComponentActivity() {
                     snackbarHost = { SnackbarHost(hostState = it) }
                 ) {
                     Column(modifier = Modifier.fillMaxSize()) {
-                        if (uiState.value.isInitial && uiState.value.loadType != LoadType.NONE) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f)
-                            ) {
-                                CircularProgressIndicator(
-                                    color = MaterialTheme.colors.secondary
+
+
+                        //main screen state [INITIAL LOAD STATE, EMPTY STATE, SHOW DATA]
+                        when {
+                            uiState.value.loadType == LoadType.INITIAL_LOAD -> {
+                                showLoading(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f)
                                 )
                             }
-                        } else {
-                            LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                                state = listState,
-                                reverseLayout = true,
-                                contentPadding = PaddingValues(vertical = 8.dp, horizontal = 16.dp)
-                            ) {
-                                itemsIndexed(itemDatas.sortedByDescending {
-                                    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").parse(it.created)
-                                }) { index, message ->
-                                    ChatBubble(
-                                        sender = message.user.fullName,
-                                        message = message.messageBody,
-                                        isMine = isMine(message),
-                                        date = message.created,
-                                        isReaded = message.read
+
+                            itemDatas.isEmpty() -> {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    showNoMessage(
+                                        Modifier
+                                            .fillMaxWidth()
                                     )
+                                }
+                            }
+
+                            else -> {
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f),
+                                    state = listState,
+                                    reverseLayout = true,
+                                    contentPadding = PaddingValues(
+                                        vertical = 8.dp,
+                                        horizontal = 16.dp
+                                    )
+                                ) {
+                                    itemsIndexed(itemDatas.sortedByDescending {
+                                        SimpleDateFormat(datePattern).parse(it.created)
+                                    }) { _, message ->
+                                        ChatBubble(
+                                            sender = message.user.fullName,
+                                            message = message.messageBody,
+                                            isMine = isMine(message),
+                                            date = message.created,
+                                            isReaded = message.read
+                                        )
+                                    }
                                 }
                             }
                         }
 
                         listState.OnBottomReached {
-                            if (uiState.value.isNextPageAvailable) {
+                            //load more old chat
+                            if (uiState.value.isNextPageAvailable && itemDatas.isNotEmpty()) {
                                 requestData(false, uiState.value.nextPage)
                             }
                         }
@@ -253,9 +305,8 @@ class ChatRoomActivity : ComponentActivity() {
                                     .height(50.dp)
                                     .padding(start = 8.dp)
                                     .align(Alignment.CenterVertically),
-                                enabled = rememberText.isNotBlank() && !isSending,
+                                enabled = rememberText.isNotBlank() && uiState.value.loadType == LoadType.NONE,
                                 onClick = {
-                                    isSending = true
                                     viewModel.sendMessage(
                                         rememberText,
                                         User(
@@ -267,7 +318,7 @@ class ChatRoomActivity : ComponentActivity() {
                                     )
                                 },
                             ) {
-                                if (isSending) {
+                                if (uiState.value.loadType == LoadType.SENDING) {
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(24.dp),
                                         color = MaterialTheme.colors.secondary
@@ -287,9 +338,53 @@ class ChatRoomActivity : ComponentActivity() {
         }
     }
 
+    @Composable
+    private fun showLoading(modifier: Modifier) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = modifier
+        ) {
+            CircularProgressIndicator(
+                color = MaterialTheme.colors.secondary
+            )
+        }
+    }
+
+    @Composable
+    private fun showNoMessage(modifier: Modifier) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = modifier
+        ) {
+            Image(
+                modifier = Modifier
+                    .clipToBounds()
+                    .size(108.dp),
+                painter = painterResource(id = R.drawable.ic_message_icon),
+                contentDescription = "",
+                colorFilter = ColorFilter.tint(color = Color.DarkGray)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "No Message",
+                fontSize = 12.sp
+            )
+        }
+    }
+
     private fun requestData(isInitialLoad: Boolean, page: Int) {
         viewModel.getAllData(
             isInitialLoad,
+            parameterData!!.getCompanyId(),
+            parameterData!!.getRoomId(),
+            page,
+            DATA_PER_PAGE,
+            parameterData!!.getParticipantsIds()
+        )
+    }
+
+    private fun refreshChat(page: Int) {
+        viewModel.refreshChat(
             parameterData!!.getCompanyId(),
             parameterData!!.getRoomId(),
             page,
@@ -338,6 +433,7 @@ class ChatRoomActivity : ComponentActivity() {
                     .padding(it.calculateBottomPadding())
             ) {
                 val containData = false
+                val isEmpty = true
                 if (containData) {
                     LazyColumn(
                         modifier = Modifier
@@ -358,15 +454,28 @@ class ChatRoomActivity : ComponentActivity() {
                         }
                     }
                 } else {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                    ) {
-                        CircularProgressIndicator(
-                            color = MaterialTheme.colors.secondary
-                        )
+                    if (isEmpty) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            showNoMessage(
+                                Modifier
+                                    .fillMaxWidth()
+                            )
+                        }
+                    } else {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                        ) {
+                            CircularProgressIndicator(
+                                color = MaterialTheme.colors.secondary
+                            )
+                        }
                     }
                 }
 
@@ -429,36 +538,6 @@ class ChatRoomActivity : ComponentActivity() {
                             )
                         }
                     }
-                }
-            }
-        }
-    }
-
-    private fun jobScheduler(state: State<ChatViewState>, currentPage: Int) {
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                while (true) {
-                    val data = state.value.messages.filter {
-                        it.user.userGuid != parameterData!!.getUserId()
-                    }.map {
-                        it.messageId
-                    }
-                    if (data.isNotEmpty()) {
-                        viewModel.updateReadMessage(
-                            parameterData!!.getCompanyId(),
-                            parameterData!!.getRoomId(),
-                            request = UpdateReadStatusRequest(
-                                messageIds = data,
-                                read = Reader(
-                                    userGuid = parameterData!!.getUserId(),
-                                    fullName = parameterData!!.userName
-                                )
-                            )
-                        )
-                    }
-                    requestData(false, currentPage)
-                    Timber.e("JLChatSDK: Trying Fetch")
-                    delay(TimeUnit.SECONDS.toMillis(5))
                 }
             }
         }

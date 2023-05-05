@@ -1,6 +1,12 @@
 package com.justlogin.chat.data.preference
 
 interface AuthManagement {
-    fun getToken() : String?
-    fun saveToken(token : String)
+    fun getOauthToken() : String?
+    fun saveOauthToken(token : String)
+
+    fun getRefreshToken() : String?
+    fun saveRefreshToken(token : String)
+
+    fun getEclaimToken() : String?
+    fun saveEclaimToken(token : String)
 }

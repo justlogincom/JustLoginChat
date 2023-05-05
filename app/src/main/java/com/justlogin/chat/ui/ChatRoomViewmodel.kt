@@ -14,8 +14,10 @@ import com.justlogin.chat.ui.mvi.*
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 @OptIn(FlowPreview::class)
@@ -70,6 +72,9 @@ class ChatRoomViewmodel @Inject constructor(
     private val _uiState = MutableStateFlow(ChatViewState.initialState())
     val uiState = _uiState.asStateFlow()
 
+    fun getToken() = authManagement.getOauthToken()
+    fun getRefreshToken() = authManagement.getRefreshToken()
+
     fun sendMessage(
         message: String,
         user: User,
@@ -90,7 +95,7 @@ class ChatRoomViewmodel @Inject constructor(
     }
 
     fun getAllData(
-        isInitialLoad : Boolean,
+        isInitialLoad: Boolean,
         companyGUID: String,
         reportId: String,
         currentPage: Int,
@@ -101,6 +106,30 @@ class ChatRoomViewmodel @Inject constructor(
             intentFlow.emit(
                 ChatIntent.InitialLoad(
                     isInitial = isInitialLoad,
+                    companyGUID = companyGUID,
+                    reportId = reportId,
+                    currentPage = currentPage,
+                    noOfPage = noOfPage,
+                    CreateChatMemberRequest(
+                        notificationKey = "ExpenseApprovalChat",
+                        chatMembers = chatMembers,
+                        additionalData = Any()
+                    )
+                )
+            )
+        }
+    }
+
+    fun refreshChat(
+        companyGUID: String,
+        reportId: String,
+        currentPage: Int,
+        noOfPage: Int,
+        chatMembers: List<String>
+    ) {
+        viewModelScope.launch {
+            intentFlow.emit(
+                ChatIntent.RefreshPage(
                     companyGUID = companyGUID,
                     reportId = reportId,
                     currentPage = currentPage,
@@ -138,7 +167,6 @@ class ChatRoomViewmodel @Inject constructor(
                 }
 
                 is ChatIntent.RefreshPage -> ChatAction.RefreshData(
-                    true,
                     intent.companyGUID,
                     intent.reportId,
                     intent.currentPage,
@@ -190,7 +218,7 @@ class ChatRoomViewmodel @Inject constructor(
             }.catch { err ->
                 emit(ChatResult.CreateRoom.Error(error = err))
             }.onStart {
-                emit(ChatResult.CreateRoom.Loading(LoadType.SHIMMER))
+                emit(ChatResult.CreateRoom.Loading(LoadType.INITIAL_LOAD))
             }.flowOn(dispatcher)
         }
     }
@@ -217,7 +245,7 @@ class ChatRoomViewmodel @Inject constructor(
             }.catch { err ->
                 emit(ChatResult.LoadAllUserResult.Error(error = err))
             }.onStart {
-                emit(ChatResult.LoadAllUserResult.Loading(LoadType.SHIMMER))
+                emit(ChatResult.LoadAllUserResult.Loading(LoadType.INITIAL_LOAD))
             }.flowOn(dispatcher)
         }
     }
@@ -230,14 +258,14 @@ class ChatRoomViewmodel @Inject constructor(
             }.catch { err ->
                 emit(ChatResult.SendMessage.Error(error = err))
             }.onStart {
-                emit(ChatResult.SendMessage.Loading(LoadType.SHIMMER))
+                emit(ChatResult.SendMessage.Loading(LoadType.SENDING))
             }.flowOn(dispatcher)
         }
     }
 
     private val refreshMessage = { actionFlow: Flow<ChatAction.RefreshData> ->
         actionFlow.flatMapConcat { action ->
-            flow<ChatResult.LoadAllUserResult> {
+            flow<ChatResult.RefreshResult> {
                 val result: LeaveChatResponse = invokeGetMessages.invoke(
                     action.companyGUID, action.reportId, action.currentPage, action.noOfPage
                 )
@@ -245,18 +273,16 @@ class ChatRoomViewmodel @Inject constructor(
                 val nextPage =
                     if (isNextPageAvailable) action.currentPage + 1 else action.currentPage
                 emit(
-                    ChatResult.LoadAllUserResult.Success(
-                        isInitial = action.isInitial,
+                    ChatResult.RefreshResult.Success(
                         messages = result.messages,
                         totalPages = result.totalPages,
-                        isNextPageAvailable = isNextPageAvailable, nextPage = nextPage,
+                        isNextPageAvailable = isNextPageAvailable,
+                        nextPage = nextPage,
                         currentPage = action.currentPage
                     )
                 )
             }.catch { err ->
-                emit(ChatResult.LoadAllUserResult.Error(error = err))
-            }.onStart {
-                emit(ChatResult.LoadAllUserResult.Loading(LoadType.SHIMMER))
+                emit(ChatResult.RefreshResult.Error(error = err))
             }.flowOn(dispatcher)
         }
     }
@@ -271,7 +297,7 @@ class ChatRoomViewmodel @Inject constructor(
             }.catch { err ->
                 emit(ChatResult.DeleteMessage.Error(error = err, action.messageId))
             }.onStart {
-                emit(ChatResult.DeleteMessage.Loading(LoadType.SHIMMER))
+                emit(ChatResult.DeleteMessage.Loading(LoadType.INITIAL_LOAD))
             }.flowOn(dispatcher)
         }
     }
@@ -287,7 +313,7 @@ class ChatRoomViewmodel @Inject constructor(
             }.catch { err ->
                 emit(ChatResult.UpdateMessage.Error(error = err, action.request.MessageId))
             }.onStart {
-                emit(ChatResult.UpdateMessage.Loading(LoadType.SHIMMER))
+                emit(ChatResult.UpdateMessage.Loading(LoadType.INITIAL_LOAD))
             }.flowOn(dispatcher)
         }
     }
@@ -303,6 +329,12 @@ class ChatRoomViewmodel @Inject constructor(
                 SharingStarted.Eagerly
             )
 
+        val sendMessageAction = sharedFlow
+            .filterIsInstance<ChatAction.SendMessage>()
+            .shareIn(
+                viewModelScope,
+                SharingStarted.Eagerly
+            )
 
         merge(
             incomingFlow
@@ -310,9 +342,7 @@ class ChatRoomViewmodel @Inject constructor(
                 .let(readMessage),
             fetchInitial.let(createMember),
             fetchInitial.let(fetchMessages),
-            sharedFlow
-                .filterIsInstance<ChatAction.SendMessage>()
-                .let(sendMessage),
+            sendMessageAction.let(sendMessage),
             sharedFlow
                 .filterIsInstance<ChatAction.DeleteMessage>()
                 .let(deleteMessage),
@@ -333,7 +363,7 @@ class ChatRoomViewmodel @Inject constructor(
                     when (result) {
                         is ChatResult.LoadAllUserResult.Error -> {
                             prevState.copy(
-                                error = result.error,
+                                error = ErrorType.CommonError(result.error),
                                 loadType = LoadType.NONE
                             )
                         }
@@ -341,13 +371,12 @@ class ChatRoomViewmodel @Inject constructor(
                         is ChatResult.LoadAllUserResult.Loading -> {
                             prevState.copy(
                                 error = null,
-                                loadType = result.loadType
+                                loadType = result.loadType,
                             )
                         }
 
                         is ChatResult.LoadAllUserResult.Success -> {
                             prevState.copy(
-                                isInitial = result.isInitial,
                                 error = null,
                                 loadType = LoadType.NONE,
                                 messages = result.messages,
@@ -361,105 +390,96 @@ class ChatRoomViewmodel @Inject constructor(
 
                 is ChatResult.CreateRoom.Error ->
                     prevState.copy(
-                        error = result.error,
+                        error = ErrorType.CommonError(result.error),
                         loadType = LoadType.NONE,
-                        messages = prevState.messages
                     )
 
                 is ChatResult.CreateRoom.Loading ->
                     prevState.copy(
                         error = null,
-                        loadType = LoadType.SHIMMER,
-                        messages = prevState.messages
+                        loadType = result.loadType,
                     )
 
                 is ChatResult.CreateRoom.Success ->
                     prevState.copy(
                         error = null,
                         loadType = LoadType.NONE,
-                        messages = prevState.messages
                     )
 
                 is ChatResult.DeleteMessage.Error ->
                     prevState.copy(
-                        error = result.error,
+                        error = ErrorType.CommonError(result.error),
                         loadType = LoadType.NONE,
-                        messages = prevState.messages
                     )
 
                 is ChatResult.DeleteMessage.Loading ->
                     prevState.copy(
                         error = null,
-                        loadType = LoadType.SHIMMER,
-                        messages = prevState.messages
+                        loadType = LoadType.INITIAL_LOAD,
                     )
 
                 is ChatResult.DeleteMessage.Success ->
                     prevState.copy(
                         error = null,
                         loadType = LoadType.NONE,
-                        messages = prevState.messages
                     )
 
                 is ChatResult.SendMessage.Error ->
                     prevState.copy(
-                        error = result.error,
+                        error = ErrorType.MessageFail(result.error),
                         loadType = LoadType.NONE,
-                        messages = prevState.messages
                     )
 
                 is ChatResult.SendMessage.Loading ->
                     prevState.copy(
                         error = null,
-                        loadType = LoadType.SHIMMER,
-                        messages = prevState.messages
+                        loadType = LoadType.SENDING,
                     )
 
                 is ChatResult.SendMessage.Success ->
                     prevState.copy(
                         error = null,
+                        currentPage = 1, // reset to page 1 when we send new message
                         loadType = LoadType.NONE,
-                        messages = prevState.messages
                     )
 
                 is ChatResult.UpdateMessage.Error ->
                     prevState.copy(
-                        error = result.error,
+                        error = ErrorType.CommonError(result.error),
                         loadType = LoadType.NONE,
-                        messages = prevState.messages
                     )
 
                 is ChatResult.UpdateMessage.Loading ->
                     prevState.copy(
                         error = null,
-                        loadType = LoadType.SHIMMER,
-                        messages = prevState.messages
+                        loadType = LoadType.INITIAL_LOAD,
                     )
 
                 is ChatResult.UpdateMessage.Success ->
                     prevState.copy(
                         error = null,
                         loadType = LoadType.NONE,
-                        messages = prevState.messages
                     )
 
                 is ChatResult.ReadMessage.Error -> prevState.copy(
-                    error = result.error,
-                    loadType = prevState.loadType,
-                    messages = prevState.messages
+                    error = ErrorType.CommonError(result.error),
                 )
 
                 is ChatResult.ReadMessage.Loading -> prevState.copy(
                     error = null,
-                    loadType = prevState.loadType,
-                    messages = prevState.messages
                 )
 
                 is ChatResult.ReadMessage.Success -> prevState.copy(
                     error = null,
-                    loadType = prevState.loadType,
-                    messages = prevState.messages,
                     readMessageStatusUpdated = result.request.messageIds
+                )
+
+                is ChatResult.RefreshResult.Error -> prevState
+                is ChatResult.RefreshResult.Loading -> prevState
+                is ChatResult.RefreshResult.Success -> prevState.copy(
+                    messages = result.messages,
+                    currentPage = result.currentPage,
+                    isNextPageAvailable = result.isNextPageAvailable
                 )
             }
         }
@@ -476,6 +496,27 @@ class ChatRoomViewmodel @Inject constructor(
         viewModelScope.cancel()
         super.onCleared()
     }
+
+    fun startAutoFetching(
+        companyGUID: String,
+        reportId: String,
+        noOfPage: Int,
+        chatMembers: List<String>
+    ) {
+        viewModelScope.launch {
+            while (true) {
+                delay(TimeUnit.SECONDS.toMillis(5L))
+                refreshChat(
+                    companyGUID,
+                    reportId,
+                    _uiState.value.currentPage,
+                    noOfPage,
+                    chatMembers
+                )
+            }
+        }
+    }
+
     init {
         intentFlow
             .let(intentFilter)

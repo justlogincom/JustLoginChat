@@ -2,6 +2,7 @@ package com.justlogin.chat
 
 import android.app.Application
 import android.util.Log
+import com.justlogin.chat.data.parameter.AuthParameter
 import com.justlogin.chat.data.preference.AuthManagement
 import com.justlogin.chat.module.DaggerJLComponent
 import com.justlogin.chat.module.JLComponent
@@ -21,9 +22,9 @@ class JLChatSDK() {
     @Inject
     protected lateinit var authManagement: AuthManagement
 
-    private lateinit var token: String
-    fun setToken(token: String) = apply {
-        this.token = token
+    private lateinit var authParameter: AuthParameter
+    fun setAuthenticator(authParameter: AuthParameter) = apply {
+        this.authParameter = authParameter
     }
 
     fun enableDebug(flag: Boolean) = apply {
@@ -51,19 +52,26 @@ class JLChatSDK() {
             plant(Timber.DebugTree())
         }
         if (::SERVER_URL.isInitialized.not()) {
-            Log.e(javaClass.simpleName, "Error Doesn't Have SERVER_URL")
+            Log.e(javaClass.simpleName, "Error doesn't Have SERVER_URL")
+        }
+
+        if(::authParameter.isInitialized.not()){
+            Log.e(javaClass.simpleName, "Error doesn't valid authenticator")
         }
 
         component =
             DaggerJLComponent
                 .builder()
                 .application(this.application)
+                .authenticator(authParameter)
                 .serverConfig(SERVER_URL to isDebugable)
                 .build()
         component.inject(this)
 
-        if (::token.isInitialized) {
-            authManagement.saveToken(token)
+        if (::authParameter.isInitialized) {
+            authManagement.saveOauthToken(authParameter.token)
+            authManagement.saveRefreshToken(authParameter.refreshToken)
+            authManagement.saveEclaimToken(authParameter.accessToken)
         } else {
             Log.e(javaClass.simpleName, "please set token before initialize this SDK")
         }
@@ -76,19 +84,5 @@ class JLChatSDK() {
 
     fun setThemeColor(themeResource: Int) = apply {
         this.theme = themeResource
-    }
-
-    /**
-     * Call this function when got throw 401
-     */
-    fun refreshSDKWithNewToken(token: String) {
-        apply {
-            this.token = token
-        }
-        if (this::application.isInitialized) {
-            initSDK(application)
-        } else {
-            Log.e(javaClass.simpleName, "SDK was not attached to any application")
-        }
     }
 }

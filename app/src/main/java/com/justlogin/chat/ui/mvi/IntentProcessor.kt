@@ -66,7 +66,6 @@ sealed class ChatAction {
     ) : ChatAction()
 
     data class RefreshData(
-        val isInitial: Boolean,
         val companyGUID: String,
         val reportId: String,
         val currentPage: Int,
@@ -120,6 +119,19 @@ sealed class ChatResult {
         data class Error(val error: Throwable) : LoadAllUserResult()
     }
 
+    sealed class RefreshResult : ChatResult() {
+        data class Loading(val loadType: LoadType) : RefreshResult()
+        data class Success(
+            val currentPage: Int,
+            val messages: List<Message>,
+            val totalPages: Int,
+            val isNextPageAvailable: Boolean,
+            val nextPage: Int
+        ) : RefreshResult()
+
+        data class Error(val error: Throwable) : RefreshResult()
+    }
+
     sealed class SendMessage : ChatResult() {
         data class Loading(val loadType: LoadType) : SendMessage()
         data class Success(val success: Boolean) : SendMessage()
@@ -141,10 +153,9 @@ sealed class ChatResult {
 }
 
 enum class LoadType {
-    PULL_TO_REFRESH,
-    SHIMMER,
     NONE,
-    SEND
+    INITIAL_LOAD,
+    SENDING,
 }
 
 sealed class ChatViewEffect {
@@ -155,21 +166,24 @@ sealed class ChatViewEffect {
     data class UpdateMessageAt(val messageId: String) : ChatViewEffect()
 }
 
+sealed class ErrorType {
+    data class MessageFail(val error: Throwable?) : ErrorType()
+    data class CommonError(val error: Throwable?): ErrorType()
+}
+
 data class ChatViewState(
-    val isInitial: Boolean,
     val messages: List<Message>,
     val loadType: LoadType,
     val nextPage: Int,
     val currentPage: Int,
     val isNextPageAvailable: Boolean,
     val readMessageStatusUpdated: List<String>,
-    val error: Throwable?,
+    val error: ErrorType?,
 ) {
     companion object {
         fun initialState() = ChatViewState(
-            isInitial = true,
             messages = listOf(),
-            loadType = LoadType.SHIMMER,
+            loadType = LoadType.INITIAL_LOAD,
             nextPage = 1,
             currentPage = 1,
             isNextPageAvailable = true,
