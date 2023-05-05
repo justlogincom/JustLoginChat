@@ -108,7 +108,6 @@ sealed class ChatResult {
     sealed class LoadAllUserResult : ChatResult() {
         data class Loading(val loadType: LoadType) : LoadAllUserResult()
         data class Success(
-            val isInitial: Boolean,
             val currentPage: Int,
             val messages: List<Message>,
             val totalPages: Int,
@@ -154,6 +153,7 @@ sealed class ChatResult {
 
 enum class LoadType {
     NONE,
+    LOAD_MORE,
     INITIAL_LOAD,
     SENDING,
 }
@@ -186,7 +186,7 @@ data class ChatViewState(
             loadType = LoadType.INITIAL_LOAD,
             nextPage = 1,
             currentPage = 1,
-            isNextPageAvailable = true,
+            isNextPageAvailable = false,
             readMessageStatusUpdated = listOf(),
             error = null
         )

@@ -235,17 +235,17 @@ class ChatRoomViewmodel @Inject constructor(
 
                 emit(
                     ChatResult.LoadAllUserResult.Success(
-                        isInitial = action.isInitial,
                         messages = result.messages,
                         totalPages = result.totalPages,
-                        isNextPageAvailable = isNextPageAvailable, nextPage = nextPage,
+                        isNextPageAvailable = isNextPageAvailable,
+                        nextPage = nextPage,
                         currentPage = action.currentPage
                     )
                 )
             }.catch { err ->
                 emit(ChatResult.LoadAllUserResult.Error(error = err))
             }.onStart {
-                emit(ChatResult.LoadAllUserResult.Loading(LoadType.INITIAL_LOAD))
+                emit(ChatResult.LoadAllUserResult.Loading(if (action.isInitial) LoadType.INITIAL_LOAD else LoadType.LOAD_MORE))
             }.flowOn(dispatcher)
         }
     }

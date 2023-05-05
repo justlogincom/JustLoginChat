@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -81,6 +83,8 @@ import com.justlogin.chat.module.ViewModelFactory
 import com.justlogin.chat.ui.mvi.ChatViewEffect
 import com.justlogin.chat.ui.mvi.ErrorType
 import com.justlogin.chat.ui.mvi.LoadType
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.text.SimpleDateFormat
@@ -129,6 +133,7 @@ class ChatRoomActivity : ComponentActivity() {
                 val listState = rememberLazyListState()
                 val uiState = viewModel.uiState.collectAsState()
                 val coroutineScope = rememberCoroutineScope()
+                val isScrolling = remember { mutableStateOf(false) }
                 for (message in uiState.value.messages) {
                     if (set.add(message)) {
                         itemDatas.add(message)
@@ -156,8 +161,8 @@ class ChatRoomActivity : ComponentActivity() {
                 val viewEffect = viewModel.viewEffect.collectAsState(initial = null)
                 when (val effect = viewEffect.value) {
                     ChatViewEffect.RefreshMessageList -> {
+                        Timber.e("JLChatSDK refreshing.....")
                         refreshChat(currentPage)
-                        //scroll to bottom
                     }
 
                     is ChatViewEffect.ShowFailedFetch -> {
@@ -173,30 +178,32 @@ class ChatRoomActivity : ComponentActivity() {
                     }
 
                     is ErrorType.MessageFail -> {
-                        LaunchedEffect(key1 = uiState.value, block = {
-                            coroutineScope.launch {
-                                val result = scaffoldState.snackbarHostState.showSnackbar(
-                                    message = "Error: ${error.error?.message}",
-                                    actionLabel = "Retry",
-                                    duration = SnackbarDuration.Indefinite
-                                )
+                        if (rememberText.isNotBlank()) {
+                            LaunchedEffect(key1 = uiState.value, block = {
+                                coroutineScope.launch {
+                                    val result = scaffoldState.snackbarHostState.showSnackbar(
+                                        message = "Error: ${error.error?.message}",
+                                        actionLabel = "Retry",
+                                        duration = SnackbarDuration.Indefinite
+                                    )
 
-                                when (result) {
-                                    SnackbarResult.Dismissed -> {}
-                                    SnackbarResult.ActionPerformed -> {
-                                        viewModel.sendMessage(
-                                            rememberText,
-                                            User(
-                                                parameterData!!.getUserId(),
-                                                parameterData!!.userName
-                                            ),
-                                            parameterData!!.getCompanyId(),
-                                            parameterData!!.getRoomId()
-                                        )
+                                    when (result) {
+                                        SnackbarResult.Dismissed -> {}
+                                        SnackbarResult.ActionPerformed -> {
+                                            viewModel.sendMessage(
+                                                rememberText,
+                                                User(
+                                                    parameterData!!.getUserId(),
+                                                    parameterData!!.userName
+                                                ),
+                                                parameterData!!.getCompanyId(),
+                                                parameterData!!.getRoomId()
+                                            )
+                                        }
                                     }
                                 }
-                            }
-                        })
+                            })
+                        }
                     }
 
                     else -> {
@@ -227,7 +234,15 @@ class ChatRoomActivity : ComponentActivity() {
                     snackbarHost = { SnackbarHost(hostState = it) }
                 ) {
                     Column(modifier = Modifier.fillMaxSize()) {
-
+                        if (uiState.value.loadType == LoadType.LOAD_MORE) {
+                            CircularProgressIndicator(
+                                modifier = Modifier
+                                    .wrapContentWidth()
+                                    .wrapContentHeight()
+                                    .align(Alignment.CenterHorizontally)
+                                    .padding(16.dp),
+                            )
+                        }
 
                         //main screen state [INITIAL LOAD STATE, EMPTY STATE, SHOW DATA]
                         when {
@@ -276,16 +291,15 @@ class ChatRoomActivity : ComponentActivity() {
                                         )
                                     }
                                 }
+
+                                InfiniteListHandler(
+                                    listState = listState,
+                                    isNextPageAvailable = uiState.value.isNextPageAvailable
+                                ) {
+                                    requestData(false, uiState.value.nextPage)
+                                }
                             }
                         }
-
-                        listState.OnBottomReached {
-                            //load more old chat
-                            if (uiState.value.isNextPageAvailable && itemDatas.isNotEmpty()) {
-                                requestData(false, uiState.value.nextPage)
-                            }
-                        }
-
 
                         Row(
                             modifier = Modifier
@@ -347,6 +361,34 @@ class ChatRoomActivity : ComponentActivity() {
             CircularProgressIndicator(
                 color = MaterialTheme.colors.secondary
             )
+        }
+    }
+
+    @Composable
+    fun InfiniteListHandler(
+        listState: LazyListState,
+        isNextPageAvailable: Boolean,
+        buffer: Int = 2,
+        onLoadMore: () -> Unit
+    ) {
+        val loadMore = remember {
+            derivedStateOf {
+                val layoutInfo = listState.layoutInfo
+                val totalItemsNumber = layoutInfo.totalItemsCount
+                val lastVisibleItemIndex =
+                    (layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) + 1
+
+                lastVisibleItemIndex > (totalItemsNumber - buffer)
+            }
+        }
+
+        LaunchedEffect(loadMore) {
+            snapshotFlow { loadMore.value }
+                .distinctUntilChanged()
+                .filter { isNextPageAvailable }
+                .collect {
+                    onLoadMore()
+                }
         }
     }
 
@@ -546,59 +588,14 @@ class ChatRoomActivity : ComponentActivity() {
     private fun isMine(message: Message): Boolean =
         message.user.userGuid == parameterData!!.getUserId()
 
-
-    @Preview
-    @Composable
-    fun ListWithStickyTextFieldAndButton() {
-        var textFieldValue by remember { mutableStateOf("") }
-
-        Column(modifier = Modifier.fillMaxSize()) {
-            LazyColumn(modifier = Modifier.weight(1f)) {
-                items(5) {
-                    Text("Item $it")
-                }
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedTextField(
-                    value = textFieldValue,
-                    onValueChange = { textFieldValue = it },
-                    label = { Text("Message") },
-                    modifier = Modifier.weight(1f)
-                )
-                Button(
-                    modifier = Modifier
-                        .height(50.dp)
-                        .padding(start = 8.dp)
-                        .align(Alignment.CenterVertically),
-                    onClick = { /* Perform action */ },
-                ) {
-                    Image(
-                        imageVector = ImageVector.vectorResource(
-                            R.drawable.ic_send_24
-                        ), contentDescription = ""
-                    )
-                }
-            }
-        }
-    }
-
-
     @Composable
     fun LazyListState.OnBottomReached(
         loadMore: () -> Unit
     ) {
         val shouldLoadMore = remember {
             derivedStateOf {
-                val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
-                    ?: return@derivedStateOf true
-
+                val lastVisibleItem =
+                    layoutInfo.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf true
                 lastVisibleItem.index == layoutInfo.totalItemsCount - 1
             }
         }
