@@ -36,6 +36,7 @@ import androidx.compose.material.Card
 import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Icon
 import androidx.compose.material.IconButton
+import androidx.compose.material.LocalContentColor
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.Scaffold
@@ -76,7 +77,10 @@ import androidx.compose.ui.unit.sp
 import com.google.accompanist.themeadapter.appcompat.AppCompatTheme
 import com.justlogin.chat.JLChatSDK
 import com.justlogin.chat.R
+import com.justlogin.chat.common.adjustColor
+import com.justlogin.chat.common.parse
 import com.justlogin.chat.data.parameter.ChatParameter
+import com.justlogin.chat.data.parameter.ClientType
 import com.justlogin.chat.data.parameter.User
 import com.justlogin.chat.data.parameter.sanitize
 import com.justlogin.chat.data.response.Message
@@ -116,6 +120,7 @@ class ChatRoomActivity : ComponentActivity() {
         JLChatSDK.getInstance().component.inject(this)
         super.onCreate(savedInstanceState)
         parameterData = intent.getParcelableExtra(PARAM_DATA)
+        val isExpense = JLChatSDK.getInstance().clientType == ClientType.Expense
         Timber.tag("Chat SDK").e(
             "Initialization Chat with \n" +
                     "Token : ${viewModel.getToken()}\n" +
@@ -219,10 +224,14 @@ class ChatRoomActivity : ComponentActivity() {
                     scaffoldState = scaffoldState,
                     topBar = {
                         TopAppBar(
-                            modifier = Modifier.paint(
-                                painterResource(R.drawable.bg_more),
-                                contentScale = ContentScale.FillBounds
-                            ),
+                            modifier = Modifier
+                                .height(60.dp)
+                                .paint(
+                                    painterResource(if (isExpense) R.drawable.bg_more_expense else R.drawable.bg_more),
+                                    contentScale = ContentScale.Crop,
+                                    sizeToIntrinsics = true,
+                                ),
+                            backgroundColor = Color.Unspecified,
                             elevation = 0.dp,
                             title = { Text(text = "Chat", textAlign = TextAlign.Center) },
                             navigationIcon = {
@@ -450,13 +459,9 @@ class ChatRoomActivity : ComponentActivity() {
                     modifier = Modifier
                         .height(80.dp)
                         .paint(
-                            painterResource(id = R.drawable.bg_more),
+                            painterResource(id = R.drawable.bg_more_expense),
                             contentScale = ContentScale.Crop,
-                            sizeToIntrinsics = true,
-                            colorFilter = ColorFilter.tint(
-                                MaterialTheme.colors.secondary.copy(0.5f),
-                                BlendMode.ColorBurn
-                            )
+                            sizeToIntrinsics = true
                         ),
                     backgroundColor = Color.Unspecified,
                     elevation = 0.dp,
@@ -623,13 +628,15 @@ class ChatRoomActivity : ComponentActivity() {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalAlignment = if(isMine) Alignment.End else Alignment.Start
+            horizontalAlignment = if (isMine) Alignment.End else Alignment.Start
         )
         {
             Card(
                 modifier = Modifier.widthIn(max = 340.dp),
                 shape = createShape(isMine),
-                backgroundColor = if (isMine) MaterialTheme.colors.primary else MaterialTheme.colors.secondary,
+                backgroundColor = if (isMine) MaterialTheme.colors.primary.adjustColor(0.5f) else MaterialTheme.colors.primary.adjustColor(
+                    0.8f
+                ),
             ) {
                 Column() {
                     Text(

@@ -3,6 +3,7 @@ package com.justlogin.chat
 import android.app.Application
 import android.util.Log
 import com.justlogin.chat.data.parameter.AuthParameter
+import com.justlogin.chat.data.parameter.ClientType
 import com.justlogin.chat.data.preference.AuthManagement
 import com.justlogin.chat.module.DaggerJLComponent
 import com.justlogin.chat.module.JLComponent
@@ -17,6 +18,7 @@ class JLChatSDK() {
     lateinit var component: JLComponent
     protected var isDebugable: Boolean = false
     private lateinit var SERVER_URL: String
+    internal lateinit var clientType: ClientType
     protected lateinit var application: Application
 
     @Inject
@@ -69,6 +71,7 @@ class JLChatSDK() {
         component.inject(this)
 
         if (::authParameter.isInitialized) {
+            clientType = authParameter.clientType
             authManagement.saveOauthToken(authParameter.token)
             authManagement.saveRefreshToken(authParameter.refreshToken)
             authManagement.saveEclaimToken(authParameter.accessToken)
