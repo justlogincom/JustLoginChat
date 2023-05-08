@@ -78,6 +78,7 @@ import com.justlogin.chat.JLChatSDK
 import com.justlogin.chat.R
 import com.justlogin.chat.data.parameter.ChatParameter
 import com.justlogin.chat.data.parameter.User
+import com.justlogin.chat.data.parameter.sanitize
 import com.justlogin.chat.data.response.Message
 import com.justlogin.chat.module.ViewModelFactory
 import com.justlogin.chat.ui.mvi.ChatViewEffect
@@ -586,7 +587,7 @@ class ChatRoomActivity : ComponentActivity() {
     }
 
     private fun isMine(message: Message): Boolean =
-        message.user.userGuid == parameterData!!.getUserId()
+        message.user.userGuid.sanitize() == parameterData!!.getUserId().sanitize()
 
     @Composable
     fun LazyListState.OnBottomReached(
@@ -622,7 +623,7 @@ class ChatRoomActivity : ComponentActivity() {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalAlignment = Alignment.End
+            horizontalAlignment = if(isMine) Alignment.End else Alignment.Start
         )
         {
             Card(
