@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -30,13 +31,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Button
 import androidx.compose.material.Card
 import androidx.compose.material.CircularProgressIndicator
 import androidx.compose.material.Icon
 import androidx.compose.material.IconButton
-import androidx.compose.material.LocalContentColor
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.Scaffold
@@ -60,9 +61,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.paint
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -70,19 +71,22 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.annotation.ExperimentalCoilApi
+import coil.compose.ImagePainter
+import coil.compose.rememberImagePainter
+import coil.transform.CircleCropTransformation
 import com.google.accompanist.themeadapter.appcompat.AppCompatTheme
 import com.justlogin.chat.JLChatSDK
 import com.justlogin.chat.R
-import com.justlogin.chat.common.adjustColor
 import com.justlogin.chat.common.parse
 import com.justlogin.chat.data.parameter.ChatParameter
 import com.justlogin.chat.data.parameter.ClientType
 import com.justlogin.chat.data.parameter.User
-import com.justlogin.chat.data.parameter.sanitize
 import com.justlogin.chat.data.response.Message
 import com.justlogin.chat.module.ViewModelFactory
 import com.justlogin.chat.ui.mvi.ChatViewEffect
@@ -97,6 +101,90 @@ import javax.inject.Inject
 
 class ChatRoomActivity : ComponentActivity() {
 
+    private val list: List<Pair<String, Map<String, List<Message>>>> = listOf(
+        "1" to mapOf(
+            "Dony1" to listOf(
+                Message(
+                    "", "woy1", false, "2021", com.justlogin.chat.data.response.User(
+                        "321",
+                        "Dony Nuransyah",
+                        "https://images.squarespace-cdn.com/content/v1/5af1298bfcf7fd60f31f66bd/49bf2cc5-d125-4964-a734-c42ec47e64d5/AVATAR+THE+LAST+AIRBENDER.png?format=256w"
+                    ),
+                    listOf()
+                ),
+                Message(
+                    "", "woy1", false, "2021", com.justlogin.chat.data.response.User(
+                        "321",
+                        "Dony Nuransyah",
+                        "https://images.squarespace-cdn.com/content/v1/5af1298bfcf7fd60f31f66bd/49bf2cc5-d125-4964-a734-c42ec47e64d5/AVATAR+THE+LAST+AIRBENDER.png?format=256w"
+                    ),
+                    listOf()
+                )
+            ),
+            "Dony2" to listOf(
+                Message(
+                    "", "woy2", false, "2021", com.justlogin.chat.data.response.User(
+                        "123",
+                        "Dony Nuransyah",
+                        "https://images.squarespace-cdn.com/content/v1/5af1298bfcf7fd60f31f66bd/49bf2cc5-d125-4964-a734-c42ec47e64d5/AVATAR+THE+LAST+AIRBENDER.png?format=256w"
+                    ),
+                    listOf()
+                ),
+                Message(
+                    "", "woy2", false, "2021", com.justlogin.chat.data.response.User(
+                        "123",
+                        "Dony Nuransyah",
+                        "https://images.squarespace-cdn.com/content/v1/5af1298bfcf7fd60f31f66bd/49bf2cc5-d125-4964-a734-c42ec47e64d5/AVATAR+THE+LAST+AIRBENDER.png?format=256w"
+                    ),
+                    listOf()
+                ),
+                Message(
+                    "", "woy2", false, "2021", com.justlogin.chat.data.response.User(
+                        "123",
+                        "Dony Nuransyah",
+                        "https://images.squarespace-cdn.com/content/v1/5af1298bfcf7fd60f31f66bd/49bf2cc5-d125-4964-a734-c42ec47e64d5/AVATAR+THE+LAST+AIRBENDER.png?format=256w"
+                    ),
+                    listOf()
+                )
+            )
+        ),
+        "2" to mapOf(
+            "Dony2" to listOf(
+                Message(
+                    "", "woy2", false, "2021", com.justlogin.chat.data.response.User(
+                        "123",
+                        "Dony Nuransyah",
+                        "https://images.squarespace-cdn.com/content/v1/5af1298bfcf7fd60f31f66bd/49bf2cc5-d125-4964-a734-c42ec47e64d5/AVATAR+THE+LAST+AIRBENDER.png?format=256w"
+                    ),
+                    listOf()
+                )
+            )
+        ),
+        "3" to mapOf(
+            "Dony3" to listOf(
+                Message(
+                    "", "woy3", false, "2021", com.justlogin.chat.data.response.User(
+                        "321",
+                        "Dony Nuransyah",
+                        "https://images.squarespace-cdn.com/content/v1/5af1298bfcf7fd60f31f66bd/49bf2cc5-d125-4964-a734-c42ec47e64d5/AVATAR+THE+LAST+AIRBENDER.png?format=256w"
+                    ),
+                    listOf()
+                )
+            )
+        ),
+        "4" to mapOf(
+            "Dony4" to listOf(
+                Message(
+                    "", "woy4", false, "2021", com.justlogin.chat.data.response.User(
+                        "321",
+                        "Dony Nuransyah",
+                        "https://images.squarespace-cdn.com/content/v1/5af1298bfcf7fd60f31f66bd/49bf2cc5-d125-4964-a734-c42ec47e64d5/AVATAR+THE+LAST+AIRBENDER.png?format=256w"
+                    ),
+                    listOf()
+                )
+            )
+        )
+    )
     private val datePattern: String = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
 
     @Inject
@@ -278,6 +366,9 @@ class ChatRoomActivity : ComponentActivity() {
                             }
 
                             else -> {
+                                val date by remember {
+                                    mutableStateOf("")
+                                }
                                 LazyColumn(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -289,16 +380,15 @@ class ChatRoomActivity : ComponentActivity() {
                                         horizontal = 16.dp
                                     )
                                 ) {
-                                    itemsIndexed(itemDatas.sortedByDescending {
+                                    val list = itemDatas.sortedByDescending {
                                         SimpleDateFormat(datePattern).parse(it.created)
-                                    }) { _, message ->
-                                        ChatBubble(
-                                            sender = message.user.fullName,
-                                            message = message.messageBody,
-                                            isMine = isMine(message),
-                                            date = message.created,
-                                            isReaded = message.read
-                                        )
+                                    }.groupBy {
+                                        it.created
+                                    }.mapValues { (_, v) ->
+                                        v.groupBy { it.user.fullName }
+                                    }.toList()
+                                    itemsIndexed(list) { _, message ->
+                                        ChatBubble(message = message)
                                     }
                                 }
 
@@ -359,6 +449,18 @@ class ChatRoomActivity : ComponentActivity() {
                     }
                 }
             })
+        }
+    }
+
+    @Composable
+    private fun ChatBubbleWithAva(_message: Pair<String, Map<String, List<Message>>>) {
+        Column {
+            Text(text = _message.first)
+            _message.second.forEach {
+                Text(text = it.key)
+                it.value.forEach { message ->
+                }
+            }
         }
     }
 
@@ -465,10 +567,12 @@ class ChatRoomActivity : ComponentActivity() {
                         ),
                     backgroundColor = Color.Unspecified,
                     elevation = 0.dp,
-                    title = { Text(text = "Chat", textAlign = TextAlign.Center) },
+                    title = { Text(text = "Chat",modifier = Modifier.wrapContentHeight().fillMaxWidth(0.8f), textAlign = TextAlign.Center) },
                     navigationIcon = {
                         IconButton(onClick = { this@ChatRoomActivity.finishAfterTransition() }) {
-                            Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                            Row() {
+                                Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                            }
                         }
                     }
                 )
@@ -480,25 +584,20 @@ class ChatRoomActivity : ComponentActivity() {
                     .fillMaxSize()
                     .padding(it.calculateBottomPadding())
             ) {
-                val containData = false
-                val isEmpty = true
+                val containData = true
+                val isEmpty = false
                 if (containData) {
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
                         state = listState,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                         reverseLayout = true,
                         contentPadding = PaddingValues(vertical = 8.dp, horizontal = 16.dp)
                     ) {
-                        itemsIndexed(listOf("1", "2").reversed()) { index, message ->
-                            ChatBubble(
-                                sender = "message.user.fullName",
-                                message = "message.messageBody",
-                                isMine = true,
-                                date = "message.created",
-                                isReaded = true
-                            )
+                        itemsIndexed(list.reversed()) { _, message ->
+                            ChatBubble(message = message)
                         }
                     }
                 } else {
@@ -591,8 +690,8 @@ class ChatRoomActivity : ComponentActivity() {
         }
     }
 
-    private fun isMine(message: Message): Boolean =
-        message.user.userGuid.sanitize() == parameterData!!.getUserId().sanitize()
+    private fun Message.isMine(): Boolean = this.user.userGuid == "123"
+//        this.user.userGuid.sanitize() == parameterData!!.getUserId()
 
     @Composable
     fun LazyListState.OnBottomReached(
@@ -617,58 +716,84 @@ class ChatRoomActivity : ComponentActivity() {
     }
 
     @Composable
-    fun ChatBubble(
-        sender: String,
-        message: String,
-        isMine: Boolean,
-        date: String,
-        isReaded: Boolean
-    ) {
+    fun ChatBubble(message: Pair<String, Map<String, List<Message>>>) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalAlignment = if (isMine) Alignment.End else Alignment.Start
         )
         {
-            Card(
-                modifier = Modifier.widthIn(max = 340.dp),
-                shape = createShape(isMine),
-                backgroundColor = if (isMine) MaterialTheme.colors.primary.adjustColor(0.5f) else MaterialTheme.colors.primary.adjustColor(
-                    0.8f
-                ),
-            ) {
-                Column() {
+            Text(
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(start = 8.dp, top = 8.dp),
+                text = message.first,
+                fontSize = 12.sp,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            message.second.forEach { maps ->
+                Column(
+                    modifier = Modifier.align(
+                        if (maps.value[0].isMine()) Alignment.End else Alignment.Start
+                    )
+                ) {
                     Text(
                         modifier = Modifier
-                            .align(Alignment.Start)
-                            .padding(start = 8.dp, top = 8.dp),
-                        text = sender,
-                        fontSize = 12.sp,
+                            .padding(start = 8.dp, top = 8.dp)
+                            .align(if (maps.value[0].isMine()) Alignment.End else Alignment.Start),
+                        text = maps.key,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
                     )
-                    Text(
-                        modifier = Modifier.padding(8.dp),
-                        text = message,
-                        fontSize = 16.sp,
-                        color = MaterialTheme.colors.onPrimary
-                    )
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.End)
-                            .padding(start = 8.dp, bottom = 4.dp, end = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = date,
-                            fontSize = 10.sp,
-                        )
-                        if (isReaded) {
-                            Readed()
-                        } else {
-                            Unreaded()
+                    Spacer(modifier = Modifier.height(8.dp))
+                    maps.value.forEach { messages ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (messages.isMine()) {
+                                my(messages)
+                            } else {
+                                other(messages)
+                            }
                         }
+                        Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
+            }
+        }
+    }
+
+    @Composable
+    private fun my(message: Message) {
+        Row() {
+            Message(message = message.messageBody)
+            Spacer(modifier = Modifier.width(8.dp))
+            CircularAvatar(url = message.user.profileUrl)
+        }
+    }
+
+    @Composable
+    private fun other(message: Message) {
+        Row() {
+            CircularAvatar(url = message.user.profileUrl)
+            Spacer(modifier = Modifier.width(8.dp))
+            Message(message = message.messageBody)
+        }
+    }
+
+    @Composable
+    private fun Message(message: String) {
+        Card(
+            modifier = Modifier.widthIn(max = 340.dp),
+            elevation = 0.dp,
+            shape = RoundedCornerShape(10.dp),
+            backgroundColor = Color.parse("#f6fafb"),
+        ) {
+            Column() {
+                Text(
+                    modifier = Modifier.padding(8.dp),
+                    text = message,
+                    fontSize = 16.sp,
+                    color = Color.DarkGray
+                )
             }
         }
     }
@@ -714,6 +839,54 @@ class ChatRoomActivity : ComponentActivity() {
         bottomStart = if (mine) 16.dp else 0.dp
     )
 
+
+    @OptIn(ExperimentalCoilApi::class)
+    @Composable
+    fun CircularAvatar(url: String) {
+        var isLoading by remember { mutableStateOf(true) }
+
+        Box(
+            modifier = Modifier
+                .size(32.dp) // Set the desired size for your avatar
+                .clip(CircleShape) // Clip the image in a circle shape
+        ) {
+            val painter = rememberImagePainter(
+                data = url,
+                builder = {
+                    // Optional: You can apply transformations to the image if needed
+                    // For example, to crop the image to a circle shape
+                    transformations(CircleCropTransformation())
+                }
+            )
+
+            LaunchedEffect(painter) {
+                // Wait for the image to load
+                isLoading = when (painter.state) {
+                    is ImagePainter.State.Success -> false
+                    is ImagePainter.State.Error -> false
+                    else -> {
+                        true
+                    }
+                }
+            }
+
+            if (isLoading) {
+                // Placeholder image while the actual image is loading
+                Image(
+                    painter = painterResource(R.drawable.ic_person_circle),
+                    contentDescription = "Placeholder",
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Image(
+                    painter = painter,
+                    contentDescription = "Avatar",
+                    contentScale = ContentScale.Crop, // Crop the image to fit the circle
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+    }
 }
 
 fun Activity.createChatRoomWith(parameter: ChatParameter) =
