@@ -105,7 +105,7 @@ import javax.inject.Inject
 class ChatRoomActivity : ComponentActivity() {
 
     private val list: List<Pair<String, Map<String, List<Message>>>> = listOf(
-        "1L" to mapOf(
+        "2023-05-05T08:34:28.929Z" to mapOf(
             "Dony1" to listOf(
                 Message(
                     "", "woy1", false, "2021", com.justlogin.chat.data.response.User(
@@ -151,7 +151,7 @@ class ChatRoomActivity : ComponentActivity() {
                 )
             )
         ),
-       "2L" to mapOf(
+        "2023-05-15T08:34:28.929Z" to mapOf(
             "Dony2" to listOf(
                 Message(
                     "", "woy2", false, "2021", com.justlogin.chat.data.response.User(
@@ -163,7 +163,7 @@ class ChatRoomActivity : ComponentActivity() {
                 )
             )
         ),
-        "3L" to mapOf(
+        "2023-05-08T08:34:28.929Z" to mapOf(
             "Dony3" to listOf(
                 Message(
                     "", "woy3", false, "2021", com.justlogin.chat.data.response.User(
@@ -175,7 +175,7 @@ class ChatRoomActivity : ComponentActivity() {
                 )
             )
         ),
-        "4L" to mapOf(
+        "2023-05-04T08:34:28.929Z" to mapOf(
             "Dony4" to listOf(
                 Message(
                     "", "woy4", false, "2021", com.justlogin.chat.data.response.User(
@@ -386,7 +386,8 @@ class ChatRoomActivity : ComponentActivity() {
                                     val list = itemDatas.sortedByDescending {
                                         SimpleDateFormat(datePattern).parse(it.created)
                                     }.groupBy {
-                                        val createdDate = SimpleDateFormat(datePattern).parse(it.created)
+                                        val createdDate =
+                                            SimpleDateFormat(datePattern).parse(it.created)
                                         SimpleDateFormat("yyyy-MM-dd").format(createdDate)
                                     }.mapValues { (_, v) ->
                                         v.groupBy { it.user.fullName }
@@ -708,8 +709,7 @@ class ChatRoomActivity : ComponentActivity() {
         }
     }
 
-    private fun Message.isMine(): Boolean =
-        this.user.userGuid.sanitize() == parameterData!!.getUserId()
+    private fun Message.isMine(): Boolean = this.user.userGuid.sanitize() == parameterData!!.getUserId()
 
     @Composable
     fun LazyListState.OnBottomReached(
@@ -777,7 +777,8 @@ class ChatRoomActivity : ComponentActivity() {
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally)
                     .padding(start = 8.dp, top = 8.dp),
-                text = message.second.values.first()[0].created.toMillis().getDateFormated().toString(),
+                text = message.second.values.first()[0].created.toMillis().getDateFormated()
+                    .toString(),
                 fontSize = 12.sp,
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -813,19 +814,33 @@ class ChatRoomActivity : ComponentActivity() {
 
     @Composable
     private fun my(message: Message) {
-        Row() {
-            Message(message = message.messageBody)
-            Spacer(modifier = Modifier.width(8.dp))
-            CircularAvatar(url = message.user.profileUrl)
+        Column(
+            horizontalAlignment = Alignment.End,
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight()
+        ) {
+            Row(modifier = Modifier.align(Alignment.End)) {
+                Message(message = message.messageBody)
+                Spacer(modifier = Modifier.width(8.dp))
+                CircularAvatar(url = message.user.profileUrl)
+            }
         }
     }
 
     @Composable
     private fun other(message: Message) {
-        Row() {
-            CircularAvatar(url = message.user.profileUrl)
-            Spacer(modifier = Modifier.width(8.dp))
-            Message(message = message.messageBody)
+        Column(
+            horizontalAlignment = Alignment.End,
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight()
+        ) {
+            Row(modifier = Modifier.align(Alignment.Start)) {
+                CircularAvatar(url = message.user.profileUrl)
+                Spacer(modifier = Modifier.width(8.dp))
+                Message(message = message.messageBody)
+            }
         }
     }
 
