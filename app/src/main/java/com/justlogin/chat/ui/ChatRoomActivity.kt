@@ -87,6 +87,7 @@ import com.justlogin.chat.common.parse
 import com.justlogin.chat.data.parameter.ChatParameter
 import com.justlogin.chat.data.parameter.ClientType
 import com.justlogin.chat.data.parameter.User
+import com.justlogin.chat.data.parameter.sanitize
 import com.justlogin.chat.data.response.Message
 import com.justlogin.chat.module.ViewModelFactory
 import com.justlogin.chat.ui.mvi.ChatViewEffect
@@ -97,12 +98,14 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
 import javax.inject.Inject
 
 class ChatRoomActivity : ComponentActivity() {
 
     private val list: List<Pair<String, Map<String, List<Message>>>> = listOf(
-        "1" to mapOf(
+        "1L" to mapOf(
             "Dony1" to listOf(
                 Message(
                     "", "woy1", false, "2021", com.justlogin.chat.data.response.User(
@@ -148,7 +151,7 @@ class ChatRoomActivity : ComponentActivity() {
                 )
             )
         ),
-        "2" to mapOf(
+       "2L" to mapOf(
             "Dony2" to listOf(
                 Message(
                     "", "woy2", false, "2021", com.justlogin.chat.data.response.User(
@@ -160,7 +163,7 @@ class ChatRoomActivity : ComponentActivity() {
                 )
             )
         ),
-        "3" to mapOf(
+        "3L" to mapOf(
             "Dony3" to listOf(
                 Message(
                     "", "woy3", false, "2021", com.justlogin.chat.data.response.User(
@@ -172,7 +175,7 @@ class ChatRoomActivity : ComponentActivity() {
                 )
             )
         ),
-        "4" to mapOf(
+        "4L" to mapOf(
             "Dony4" to listOf(
                 Message(
                     "", "woy4", false, "2021", com.justlogin.chat.data.response.User(
@@ -383,7 +386,8 @@ class ChatRoomActivity : ComponentActivity() {
                                     val list = itemDatas.sortedByDescending {
                                         SimpleDateFormat(datePattern).parse(it.created)
                                     }.groupBy {
-                                        it.created
+                                        val createdDate = SimpleDateFormat(datePattern).parse(it.created)
+                                        SimpleDateFormat("yyyy-MM-dd").format(createdDate)
                                     }.mapValues { (_, v) ->
                                         v.groupBy { it.user.fullName }
                                     }.toList()
@@ -450,6 +454,12 @@ class ChatRoomActivity : ComponentActivity() {
                 }
             })
         }
+    }
+
+    fun String.toMillis(): Long {
+        val format = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS")
+        val date = format.parse(this)
+        return date.time
     }
 
     @Composable
@@ -567,7 +577,15 @@ class ChatRoomActivity : ComponentActivity() {
                         ),
                     backgroundColor = Color.Unspecified,
                     elevation = 0.dp,
-                    title = { Text(text = "Chat",modifier = Modifier.wrapContentHeight().fillMaxWidth(0.8f), textAlign = TextAlign.Center) },
+                    title = {
+                        Text(
+                            text = "Chat",
+                            modifier = Modifier
+                                .wrapContentHeight()
+                                .fillMaxWidth(0.8f),
+                            textAlign = TextAlign.Center
+                        )
+                    },
                     navigationIcon = {
                         IconButton(onClick = { this@ChatRoomActivity.finishAfterTransition() }) {
                             Row() {
@@ -690,8 +708,8 @@ class ChatRoomActivity : ComponentActivity() {
         }
     }
 
-    private fun Message.isMine(): Boolean = this.user.userGuid == "123"
-//        this.user.userGuid.sanitize() == parameterData!!.getUserId()
+    private fun Message.isMine(): Boolean =
+        this.user.userGuid.sanitize() == parameterData!!.getUserId()
 
     @Composable
     fun LazyListState.OnBottomReached(
@@ -715,6 +733,38 @@ class ChatRoomActivity : ComponentActivity() {
         }
     }
 
+    private fun Long.getDateFormated(): String? {
+        val currentTimeMillis = System.currentTimeMillis()
+
+        val yesterdayCalendar = Calendar.getInstance().apply {
+            add(Calendar.DAY_OF_YEAR, -1)
+        }
+
+        val format = SimpleDateFormat("HH:mm")
+
+        val formattedDate = when {
+            isSameDay(this, currentTimeMillis) -> "today, ${format.format(Date(this))}"
+            isSameDay(
+                this,
+                yesterdayCalendar.timeInMillis
+            ) -> "yesterday, ${format.format(Date(this))}"
+
+            else -> SimpleDateFormat("dd-MM-yyyy").format(Date(this))
+        }
+        return formattedDate
+    }
+
+    fun isSameDay(timeMillis1: Long, timeMillis2: Long): Boolean {
+        val calendar1 = Calendar.getInstance()
+        val calendar2 = Calendar.getInstance()
+        calendar1.timeInMillis = timeMillis1
+        calendar2.timeInMillis = timeMillis2
+
+        return calendar1.get(Calendar.YEAR) == calendar2.get(Calendar.YEAR)
+                && calendar1.get(Calendar.MONTH) == calendar2.get(Calendar.MONTH)
+                && calendar1.get(Calendar.DAY_OF_MONTH) == calendar2.get(Calendar.DAY_OF_MONTH)
+    }
+
     @Composable
     fun ChatBubble(message: Pair<String, Map<String, List<Message>>>) {
         Column(
@@ -727,7 +777,7 @@ class ChatRoomActivity : ComponentActivity() {
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally)
                     .padding(start = 8.dp, top = 8.dp),
-                text = message.first,
+                text = message.second.values.first()[0].created.toMillis().getDateFormated().toString(),
                 fontSize = 12.sp,
             )
             Spacer(modifier = Modifier.height(8.dp))
