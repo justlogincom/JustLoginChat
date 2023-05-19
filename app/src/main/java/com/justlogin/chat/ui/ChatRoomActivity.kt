@@ -93,6 +93,7 @@ import com.justlogin.chat.module.ViewModelFactory
 import com.justlogin.chat.ui.mvi.ChatViewEffect
 import com.justlogin.chat.ui.mvi.ErrorType
 import com.justlogin.chat.ui.mvi.LoadType
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
@@ -324,7 +325,15 @@ class ChatRoomActivity : ComponentActivity() {
                                 ),
                             backgroundColor = Color.Unspecified,
                             elevation = 0.dp,
-                            title = { Text(text = "Chat", textAlign = TextAlign.Center) },
+                            title = {
+                                Text(
+                                    text = "Chat",
+                                    modifier = Modifier
+                                        .wrapContentHeight()
+                                        .fillMaxWidth(0.8f),
+                                    textAlign = TextAlign.Center
+                                )
+                            },
                             navigationIcon = {
                                 IconButton(onClick = { finish() }) {
                                     Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
@@ -389,11 +398,9 @@ class ChatRoomActivity : ComponentActivity() {
                                         val createdDate =
                                             SimpleDateFormat(datePattern).parse(it.created)
                                         SimpleDateFormat("yyyy-MM-dd").format(createdDate)
-                                    }.mapValues { (_, v) ->
-                                        v.groupBy { it.user.fullName }
                                     }.toList()
                                     itemsIndexed(list) { _, message ->
-                                        ChatBubble(message = message)
+                                        ChatBubble(messages = message)
                                     }
                                 }
 
@@ -457,7 +464,7 @@ class ChatRoomActivity : ComponentActivity() {
         }
     }
 
-    fun String.toMillis(): Long {
+    private fun String.toMillis(): Long {
         val format = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS")
         val date = format.parse(this)
         return date.time
@@ -616,7 +623,7 @@ class ChatRoomActivity : ComponentActivity() {
                         contentPadding = PaddingValues(vertical = 8.dp, horizontal = 16.dp)
                     ) {
                         itemsIndexed(list.reversed()) { _, message ->
-                            ChatBubble(message = message)
+//                            ChatBubble(messages = message)
                         }
                     }
                 } else {
@@ -709,7 +716,8 @@ class ChatRoomActivity : ComponentActivity() {
         }
     }
 
-    private fun Message.isMine(): Boolean = this.user.userGuid.sanitize() == parameterData!!.getUserId()
+    private fun Message.isMine(): Boolean =
+        this.user.userGuid.sanitize() == parameterData!!.getUserId()
 
     @Composable
     fun LazyListState.OnBottomReached(
@@ -740,21 +748,21 @@ class ChatRoomActivity : ComponentActivity() {
             add(Calendar.DAY_OF_YEAR, -1)
         }
 
-        val format = SimpleDateFormat("HH:mm")
+        val format = SimpleDateFormat("HH:mm a")
 
         val formattedDate = when {
-            isSameDay(this, currentTimeMillis) -> "today, ${format.format(Date(this))}"
+            isSameDay(this, currentTimeMillis) -> "Today, ${format.format(Date(this))}"
             isSameDay(
                 this,
                 yesterdayCalendar.timeInMillis
-            ) -> "yesterday, ${format.format(Date(this))}"
+            ) -> "Yesterday, ${format.format(Date(this))}"
 
-            else -> SimpleDateFormat("dd-MM-yyyy").format(Date(this))
+            else -> SimpleDateFormat("EEE, dd MMM yyyy").format(Date(this))
         }
         return formattedDate
     }
 
-    fun isSameDay(timeMillis1: Long, timeMillis2: Long): Boolean {
+    private fun isSameDay(timeMillis1: Long, timeMillis2: Long): Boolean {
         val calendar1 = Calendar.getInstance()
         val calendar2 = Calendar.getInstance()
         calendar1.timeInMillis = timeMillis1
@@ -766,47 +774,52 @@ class ChatRoomActivity : ComponentActivity() {
     }
 
     @Composable
-    fun ChatBubble(message: Pair<String, Map<String, List<Message>>>) {
+    fun ChatBubble(messages: Pair<String, List<Message>>) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 4.dp),
         )
         {
+            var senderName by remember {
+                mutableStateOf("")
+            }
             Text(
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally)
                     .padding(start = 8.dp, top = 8.dp),
-                text = message.second.values.first()[0].created.toMillis().getDateFormated()
+                text = messages.second.first().created.toMillis().getDateFormated()
                     .toString(),
                 fontSize = 12.sp,
             )
             Spacer(modifier = Modifier.height(8.dp))
-            message.second.forEach { maps ->
+
+            messages.second.forEach { message ->
                 Column(
                     modifier = Modifier.align(
-                        if (maps.value[0].isMine()) Alignment.End else Alignment.Start
+                        if (message.isMine()) Alignment.End else Alignment.Start
                     )
                 ) {
-                    Text(
-                        modifier = Modifier
-                            .padding(start = 8.dp, top = 8.dp)
-                            .align(if (maps.value[0].isMine()) Alignment.End else Alignment.Start),
-                        text = maps.key,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    maps.value.forEach { messages ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (messages.isMine()) {
-                                my(messages)
-                            } else {
-                                other(messages)
-                            }
-                        }
+                    if (senderName != message.user.fullName && message.isMine().not()) {
+                        senderName = message.user.fullName
+                        Text(
+                            modifier = Modifier
+                                .padding(start = 8.dp, top = 8.dp)
+                                .align(if (message.isMine()) Alignment.End else Alignment.Start),
+                            text = message.user.fullName,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (message.isMine()) {
+                            my(message)
+                        } else {
+                            other(message)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
         }
@@ -821,9 +834,13 @@ class ChatRoomActivity : ComponentActivity() {
                 .wrapContentHeight()
         ) {
             Row(modifier = Modifier.align(Alignment.End)) {
-                Message(message = message.messageBody)
+                if (message.read) {
+                    Readed()
+                } else {
+                    Unreaded()
+                }
                 Spacer(modifier = Modifier.width(8.dp))
-                CircularAvatar(url = message.user.profileUrl)
+                Message(message = message.messageBody, true)
             }
         }
     }
@@ -839,18 +856,23 @@ class ChatRoomActivity : ComponentActivity() {
             Row(modifier = Modifier.align(Alignment.Start)) {
                 CircularAvatar(url = message.user.profileUrl)
                 Spacer(modifier = Modifier.width(8.dp))
-                Message(message = message.messageBody)
+                Message(message = message.messageBody, false)
             }
         }
     }
 
     @Composable
-    private fun Message(message: String) {
+    private fun Message(message: String, sender: Boolean) {
+        val color = if (sender) {
+            Color.parse(JLChatSDK.getInstance().clientType.senderChatBackground)
+        } else {
+            Color.parse(JLChatSDK.getInstance().clientType.receiverChatBackground)
+        }
         Card(
             modifier = Modifier.widthIn(max = 340.dp),
             elevation = 0.dp,
             shape = RoundedCornerShape(10.dp),
-            backgroundColor = Color.parse("#f6fafb"),
+            backgroundColor = color,
         ) {
             Column() {
                 Text(
