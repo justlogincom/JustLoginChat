@@ -383,7 +383,7 @@ class ChatRoomActivity : ComponentActivity() {
                                         horizontal = 16.dp
                                     )
                                 ) {
-                                    val list = itemDatas.sortedByDescending {
+                                    val list = itemDatas.sortedBy {
                                         SimpleDateFormat(datePattern).parse(it.created)
                                     }.groupBy {
                                         val createdDate =
