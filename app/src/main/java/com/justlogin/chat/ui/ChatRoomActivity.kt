@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -48,6 +49,7 @@ import androidx.compose.material.Text
 import androidx.compose.material.TopAppBar
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.rememberScaffoldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -86,6 +88,8 @@ import com.justlogin.chat.R
 import com.justlogin.chat.common.parse
 import com.justlogin.chat.data.parameter.ChatParameter
 import com.justlogin.chat.data.parameter.ClientType
+import com.justlogin.chat.data.parameter.Reader
+import com.justlogin.chat.data.parameter.UpdateReadStatusRequest
 import com.justlogin.chat.data.parameter.User
 import com.justlogin.chat.data.parameter.sanitize
 import com.justlogin.chat.data.response.Message
@@ -93,7 +97,6 @@ import com.justlogin.chat.module.ViewModelFactory
 import com.justlogin.chat.ui.mvi.ChatViewEffect
 import com.justlogin.chat.ui.mvi.ErrorType
 import com.justlogin.chat.ui.mvi.LoadType
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
@@ -196,8 +199,8 @@ class ChatRoomActivity : ComponentActivity() {
 
     private val viewModel: ChatRoomViewmodel by viewModels { vmFactory }
     private var currentPage: Int = 1
-    private val itemDatas: MutableList<Message> = mutableListOf()
-    private val set = HashSet<Message>()
+    private val ids: HashSet<String> = hashSetOf()
+    private val itemDatas: HashSet<Message> = hashSetOf()
 
     companion object {
         const val PARAM_DATA = "parameter_data"
@@ -205,6 +208,12 @@ class ChatRoomActivity : ComponentActivity() {
     }
 
     private var parameterData: ChatParameter? = null
+
+    val LazyListState.isLastItemVisible: Boolean
+        get() = layoutInfo.visibleItemsInfo.lastOrNull()?.index == layoutInfo.totalItemsCount - 1
+
+    val LazyListState.isFirstItemVisible: Boolean
+        get() = firstVisibleItemIndex == 0
 
 
     @SuppressLint("UnusedMaterialScaffoldPaddingParameter", "BinaryOperationInTimber")
@@ -231,10 +240,13 @@ class ChatRoomActivity : ComponentActivity() {
                 val listState = rememberLazyListState()
                 val uiState = viewModel.uiState.collectAsState()
                 val coroutineScope = rememberCoroutineScope()
-                val isScrolling = remember { mutableStateOf(false) }
-                for (message in uiState.value.messages) {
-                    if (set.add(message)) {
-                        itemDatas.add(message)
+
+
+                synchronized(itemDatas) {
+                    for (message in uiState.value.messages) {
+                        if (ids.add(message.messageId)) {
+                            itemDatas.add(message)
+                        }
                     }
                 }
 
@@ -378,9 +390,6 @@ class ChatRoomActivity : ComponentActivity() {
                             }
 
                             else -> {
-                                val date by remember {
-                                    mutableStateOf("")
-                                }
                                 LazyColumn(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -392,22 +401,27 @@ class ChatRoomActivity : ComponentActivity() {
                                         horizontal = 16.dp
                                     )
                                 ) {
-                                    val list = itemDatas.sortedBy {
-                                        SimpleDateFormat(datePattern).parse(it.created)
-                                    }.groupBy {
-                                        val createdDate =
+                                    val copiedSet = synchronized(itemDatas) {
+                                        HashSet(itemDatas)
+                                    }
+                                    val list = synchronized(copiedSet) {
+                                        copiedSet.sortedBy {
                                             SimpleDateFormat(datePattern).parse(it.created)
-                                        SimpleDateFormat("yyyy-MM-dd").format(createdDate)
-                                    }.toList()
-                                    itemsIndexed(list) { _, message ->
+                                        }.groupBy {
+                                            val createdDate =
+                                                SimpleDateFormat(datePattern).parse(it.created)
+                                            SimpleDateFormat("yyyy-MM-dd").format(createdDate)
+                                        }.toList()
+                                    }
+                                    itemsIndexed(list) { index, message ->
                                         ChatBubble(messages = message)
                                     }
                                 }
-
-                                InfiniteListHandler(
-                                    listState = listState,
-                                    isNextPageAvailable = uiState.value.isNextPageAvailable
+                                if (uiState.value.isNextPageAvailable &&
+                                    listState.canScrollForward.not() &&
+                                    listState.isScrollInProgress
                                 ) {
+                                    Timber.e("bambang loadmored")
                                     requestData(false, uiState.value.nextPage)
                                 }
                             }
@@ -495,10 +509,24 @@ class ChatRoomActivity : ComponentActivity() {
     }
 
     @Composable
+    fun rememberScrollContext(listState: LazyListState): ScrollContext {
+        val scrollContext by remember {
+            derivedStateOf {
+                ScrollContext(
+                    isTop = listState.isFirstItemVisible,
+                    isBottom = listState.isLastItemVisible
+                )
+            }
+        }
+        return scrollContext
+    }
+
+
+    @Composable
     fun InfiniteListHandler(
         listState: LazyListState,
         isNextPageAvailable: Boolean,
-        buffer: Int = 2,
+        buffer: Int = 10,
         onLoadMore: () -> Unit
     ) {
         val loadMore = remember {
@@ -507,7 +535,7 @@ class ChatRoomActivity : ComponentActivity() {
                 val totalItemsNumber = layoutInfo.totalItemsCount
                 val lastVisibleItemIndex =
                     (layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) + 1
-
+                Log.e("bambang visible = ", "$lastVisibleItemIndex - $totalItemsNumber - $buffer")
                 lastVisibleItemIndex > (totalItemsNumber - buffer)
             }
         }
@@ -793,24 +821,30 @@ class ChatRoomActivity : ComponentActivity() {
                 fontSize = 12.sp,
             )
             Spacer(modifier = Modifier.height(8.dp))
-
+            LaunchedEffect(key1 = itemDatas.size, block = {
+                Log.e("JLChatSDK", "update read at page = $currentPage")
+                val datas = messages.second
+                UpdateReadStatus(datas)
+            })
             messages.second.forEach { message ->
                 Column(
                     modifier = Modifier.align(
                         if (message.isMine()) Alignment.End else Alignment.Start
                     )
                 ) {
-                    if (senderName != message.user.fullName && message.isMine().not()) {
+                    if (senderName != message.user.fullName) {
                         senderName = message.user.fullName
-                        Text(
-                            modifier = Modifier
-                                .padding(start = 8.dp, top = 8.dp)
-                                .align(if (message.isMine()) Alignment.End else Alignment.Start),
-                            text = message.user.fullName,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        if (message.isMine().not()) {
+                            Text(
+                                modifier = Modifier
+                                    .padding(start = 8.dp, top = 8.dp)
+                                    .align(if (message.isMine()) Alignment.End else Alignment.Start),
+                                text = message.user.fullName,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (message.isMine()) {
@@ -822,6 +856,30 @@ class ChatRoomActivity : ComponentActivity() {
                     Spacer(modifier = Modifier.height(8.dp))
                 }
             }
+        }
+    }
+
+    fun UpdateReadStatus(datas: List<Message>) {
+
+        val sortedData = datas.filter {
+            it.user.userGuid.sanitize() != parameterData?.getUserId()
+        }.groupBy {
+            it.user
+        }
+        sortedData.forEach {
+            viewModel.updateReadMessage(
+                parameterData?.getCompanyId().toString(),
+                parameterData?.getRoomId().toString(),
+                UpdateReadStatusRequest(
+                    messageIds = it.value.map {
+                        it.messageId
+                    },
+                    read = Reader(
+                        it.key.userGuid,
+                        it.key.fullName
+                    )
+                )
+            )
         }
     }
 
@@ -870,7 +928,7 @@ class ChatRoomActivity : ComponentActivity() {
         }
         Card(
             modifier = Modifier.widthIn(max = 340.dp),
-            elevation = 0.dp,
+            elevation = 1.dp,
             shape = RoundedCornerShape(10.dp),
             backgroundColor = color,
         ) {
@@ -891,7 +949,7 @@ class ChatRoomActivity : ComponentActivity() {
             painter = painterResource(R.drawable.ic_check_white),
             contentDescription = "",
             modifier = Modifier.size(18.dp),
-            tint = Color.White,
+            tint = Color.Gray
         )
     }
 
@@ -980,3 +1038,8 @@ fun Activity.createChatRoomWith(parameter: ChatParameter) =
     Intent(this, ChatRoomActivity::class.java).apply {
         this.putExtra(ChatRoomActivity.PARAM_DATA, parameter)
     }
+
+data class ScrollContext(
+    val isTop: Boolean,
+    val isBottom: Boolean,
+)

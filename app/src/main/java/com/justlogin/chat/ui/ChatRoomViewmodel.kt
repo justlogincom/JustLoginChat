@@ -1,5 +1,6 @@
 package com.justlogin.chat.ui
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.justlogin.chat.data.parameter.CreateChatMemberRequest
@@ -337,7 +338,7 @@ class ChatRoomViewmodel @Inject constructor(
             )
 
         merge(
-            incomingFlow
+            sharedFlow
                 .filterIsInstance<ChatAction.ReadMessage>()
                 .let(readMessage),
             fetchInitial.let(createMember),
@@ -469,10 +470,13 @@ class ChatRoomViewmodel @Inject constructor(
                     error = null,
                 )
 
-                is ChatResult.ReadMessage.Success -> prevState.copy(
-                    error = null,
-                    readMessageStatusUpdated = result.request.messageIds
-                )
+                is ChatResult.ReadMessage.Success -> {
+                    Log.e("bambang ","bambang sukses ${result.request.messageIds}")
+                    prevState.copy(
+                        error = null,
+                        readMessageStatusUpdated = result.request.messageIds
+                    )
+                }
 
                 is ChatResult.RefreshResult.Error -> prevState
                 is ChatResult.RefreshResult.Loading -> prevState
@@ -509,7 +513,7 @@ class ChatRoomViewmodel @Inject constructor(
                 refreshChat(
                     companyGUID,
                     reportId,
-                    _uiState.value.currentPage,
+                    1,//default value to fetch recent messsage
                     noOfPage,
                     chatMembers
                 )
