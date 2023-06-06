@@ -49,7 +49,6 @@ import androidx.compose.material.Text
 import androidx.compose.material.TopAppBar
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.rememberScaffoldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -107,6 +106,8 @@ import java.util.Date
 import javax.inject.Inject
 
 class ChatRoomActivity : ComponentActivity() {
+
+    private val idsSet = HashSet<String>()
 
     private val list: List<Pair<String, Map<String, List<Message>>>> = listOf(
         "2023-05-05T08:34:28.929Z" to mapOf(
@@ -192,15 +193,13 @@ class ChatRoomActivity : ComponentActivity() {
             )
         )
     )
-    private val datePattern: String = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
 
     @Inject
     lateinit var vmFactory: ViewModelFactory
 
     private val viewModel: ChatRoomViewmodel by viewModels { vmFactory }
     private var currentPage: Int = 1
-    private val ids: HashSet<String> = hashSetOf()
-    private val itemDatas: HashSet<Message> = hashSetOf()
+    private val set = HashSet<Message>()
 
     companion object {
         const val PARAM_DATA = "parameter_data"
@@ -208,12 +207,6 @@ class ChatRoomActivity : ComponentActivity() {
     }
 
     private var parameterData: ChatParameter? = null
-
-    val LazyListState.isLastItemVisible: Boolean
-        get() = layoutInfo.visibleItemsInfo.lastOrNull()?.index == layoutInfo.totalItemsCount - 1
-
-    val LazyListState.isFirstItemVisible: Boolean
-        get() = firstVisibleItemIndex == 0
 
 
     @SuppressLint("UnusedMaterialScaffoldPaddingParameter", "BinaryOperationInTimber")
@@ -240,15 +233,7 @@ class ChatRoomActivity : ComponentActivity() {
                 val listState = rememberLazyListState()
                 val uiState = viewModel.uiState.collectAsState()
                 val coroutineScope = rememberCoroutineScope()
-
-
-                synchronized(itemDatas) {
-                    for (message in uiState.value.messages) {
-                        if (ids.add(message.messageId)) {
-                            itemDatas.add(message)
-                        }
-                    }
-                }
+                val isScrolling = remember { mutableStateOf(false) }
 
                 currentPage = uiState.value.currentPage
 
@@ -258,6 +243,15 @@ class ChatRoomActivity : ComponentActivity() {
                         parameterData!!.getRoomId(),
                         DATA_PER_PAGE,
                         parameterData!!.getParticipantsIds()
+                    )
+                })
+
+                LaunchedEffect(key1 = true, block = {
+                    viewModel.startAutoFetchingRead(
+                        parameterData!!.getCompanyId(),
+                        parameterData!!.getRoomId(),
+                        parameterData!!.getUserId(),
+                        parameterData!!.userName
                     )
                 })
 
@@ -271,8 +265,12 @@ class ChatRoomActivity : ComponentActivity() {
                 val viewEffect = viewModel.viewEffect.collectAsState(initial = null)
                 when (val effect = viewEffect.value) {
                     ChatViewEffect.RefreshMessageList -> {
-                        Timber.e("JLChatSDK refreshing.....")
+                        Timber.e("JLChatSDK state = refreshing after send.....")
                         refreshChat(currentPage)
+                    }
+
+                    ChatViewEffect.RefreshReadStatus -> {
+
                     }
 
                     is ChatViewEffect.ShowFailedFetch -> {
@@ -376,7 +374,7 @@ class ChatRoomActivity : ComponentActivity() {
                                 )
                             }
 
-                            itemDatas.isEmpty() -> {
+                            uiState.value.messages.isEmpty() -> {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.Center,
@@ -401,27 +399,16 @@ class ChatRoomActivity : ComponentActivity() {
                                         horizontal = 16.dp
                                     )
                                 ) {
-                                    val copiedSet = synchronized(itemDatas) {
-                                        HashSet(itemDatas)
-                                    }
-                                    val list = synchronized(copiedSet) {
-                                        copiedSet.sortedBy {
-                                            SimpleDateFormat(datePattern).parse(it.created)
-                                        }.groupBy {
-                                            val createdDate =
-                                                SimpleDateFormat(datePattern).parse(it.created)
-                                            SimpleDateFormat("yyyy-MM-dd").format(createdDate)
-                                        }.toList()
-                                    }
-                                    itemsIndexed(list) { index, message ->
+
+                                    itemsIndexed(uiState.value.messages.reversed()) { _, message ->
                                         ChatBubble(messages = message)
                                     }
                                 }
-                                if (uiState.value.isNextPageAvailable &&
-                                    listState.canScrollForward.not() &&
-                                    listState.isScrollInProgress
+
+                                InfiniteListHandler(
+                                    listState = listState,
+                                    isNextPageAvailable = uiState.value.isNextPageAvailable
                                 ) {
-                                    Timber.e("bambang loadmored")
                                     requestData(false, uiState.value.nextPage)
                                 }
                             }
@@ -478,10 +465,25 @@ class ChatRoomActivity : ComponentActivity() {
         }
     }
 
+    private fun updateRead(list: List<String>) {
+        viewModel.updateReadMessage(
+            parameterData!!.getCompanyId(),
+            parameterData!!.getRoomId(),
+            UpdateReadStatusRequest(
+                list,
+                read = Reader(parameterData!!.getUserId(), parameterData!!.userName)
+            )
+        )
+    }
+
+    private val formatter = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+    private val formatterMillis = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
     private fun String.toMillis(): Long {
-        val format = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS")
-        val date = format.parse(this)
-        return date.time
+        return try {
+            SimpleDateFormat(formatterMillis).parse(this).time
+        } catch (ex: Exception) {
+            SimpleDateFormat(formatter).parse(this).time
+        }
     }
 
     @Composable
@@ -509,24 +511,10 @@ class ChatRoomActivity : ComponentActivity() {
     }
 
     @Composable
-    fun rememberScrollContext(listState: LazyListState): ScrollContext {
-        val scrollContext by remember {
-            derivedStateOf {
-                ScrollContext(
-                    isTop = listState.isFirstItemVisible,
-                    isBottom = listState.isLastItemVisible
-                )
-            }
-        }
-        return scrollContext
-    }
-
-
-    @Composable
     fun InfiniteListHandler(
         listState: LazyListState,
         isNextPageAvailable: Boolean,
-        buffer: Int = 10,
+        buffer: Int = 2,
         onLoadMore: () -> Unit
     ) {
         val loadMore = remember {
@@ -535,7 +523,7 @@ class ChatRoomActivity : ComponentActivity() {
                 val totalItemsNumber = layoutInfo.totalItemsCount
                 val lastVisibleItemIndex =
                     (layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) + 1
-                Log.e("bambang visible = ", "$lastVisibleItemIndex - $totalItemsNumber - $buffer")
+
                 lastVisibleItemIndex > (totalItemsNumber - buffer)
             }
         }
@@ -745,7 +733,10 @@ class ChatRoomActivity : ComponentActivity() {
     }
 
     private fun Message.isMine(): Boolean =
-        this.user.userGuid.sanitize() == parameterData!!.getUserId()
+        this.user.userGuid.sanitize().equals(parameterData!!.getUserId().sanitize(), true)
+
+    private fun Message.isDifferentUser(userGuid: String): Boolean =
+        this.user.userGuid.sanitize().equals(userGuid.sanitize(), true).not()
 
     @Composable
     fun LazyListState.OnBottomReached(
@@ -768,6 +759,7 @@ class ChatRoomActivity : ComponentActivity() {
                 }
         }
     }
+
 
     private fun Long.getDateFormated(): String? {
         val currentTimeMillis = System.currentTimeMillis()
@@ -803,15 +795,15 @@ class ChatRoomActivity : ComponentActivity() {
 
     @Composable
     fun ChatBubble(messages: Pair<String, List<Message>>) {
+        var userId by remember {
+            mutableStateOf("")
+        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 4.dp),
         )
         {
-            var senderName by remember {
-                mutableStateOf("")
-            }
             Text(
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally)
@@ -821,36 +813,34 @@ class ChatRoomActivity : ComponentActivity() {
                 fontSize = 12.sp,
             )
             Spacer(modifier = Modifier.height(8.dp))
-            LaunchedEffect(key1 = itemDatas.size, block = {
-                Log.e("JLChatSDK", "update read at page = $currentPage")
-                val datas = messages.second
-                UpdateReadStatus(datas)
-            })
             messages.second.forEach { message ->
                 Column(
                     modifier = Modifier.align(
                         if (message.isMine()) Alignment.End else Alignment.Start
                     )
                 ) {
-                    if (senderName != message.user.fullName) {
-                        senderName = message.user.fullName
-                        if (message.isMine().not()) {
-                            Text(
-                                modifier = Modifier
-                                    .padding(start = 8.dp, top = 8.dp)
-                                    .align(if (message.isMine()) Alignment.End else Alignment.Start),
-                                text = message.user.fullName,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (message.isMine()) {
+                            userId = ""
                             my(message)
                         } else {
-                            other(message)
+                            populate(message.messageId)
+                            Column() {
+                                val differentSender = userId != message.user.userGuid
+                                if (differentSender) {
+                                    userId = message.user.userGuid
+                                    Text(
+                                        modifier = Modifier
+                                            .padding(start = 8.dp, top = 8.dp)
+                                            .align(if (message.isMine()) Alignment.End else Alignment.Start),
+                                        text = message.user.fullName,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
+                                other(message)
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
@@ -859,27 +849,9 @@ class ChatRoomActivity : ComponentActivity() {
         }
     }
 
-    fun UpdateReadStatus(datas: List<Message>) {
-
-        val sortedData = datas.filter {
-            it.user.userGuid.sanitize() != parameterData?.getUserId()
-        }.groupBy {
-            it.user
-        }
-        sortedData.forEach {
-            viewModel.updateReadMessage(
-                parameterData?.getCompanyId().toString(),
-                parameterData?.getRoomId().toString(),
-                UpdateReadStatusRequest(
-                    messageIds = it.value.map {
-                        it.messageId
-                    },
-                    read = Reader(
-                        it.key.userGuid,
-                        it.key.fullName
-                    )
-                )
-            )
+    private fun populate(messageId: String) {
+        if (idsSet.add(messageId)) {
+            viewModel.idsMessage.add(messageId)
         }
     }
 
@@ -928,7 +900,7 @@ class ChatRoomActivity : ComponentActivity() {
         }
         Card(
             modifier = Modifier.widthIn(max = 340.dp),
-            elevation = 1.dp,
+            elevation = 0.dp,
             shape = RoundedCornerShape(10.dp),
             backgroundColor = color,
         ) {
@@ -949,7 +921,7 @@ class ChatRoomActivity : ComponentActivity() {
             painter = painterResource(R.drawable.ic_check_white),
             contentDescription = "",
             modifier = Modifier.size(18.dp),
-            tint = Color.Gray
+            tint = Color.White,
         )
     }
 
@@ -1038,8 +1010,3 @@ fun Activity.createChatRoomWith(parameter: ChatParameter) =
     Intent(this, ChatRoomActivity::class.java).apply {
         this.putExtra(ChatRoomActivity.PARAM_DATA, parameter)
     }
-
-data class ScrollContext(
-    val isTop: Boolean,
-    val isBottom: Boolean,
-)

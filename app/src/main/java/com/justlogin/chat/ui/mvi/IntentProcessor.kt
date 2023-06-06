@@ -160,6 +160,7 @@ enum class LoadType {
 
 sealed class ChatViewEffect {
     object RefreshMessageList : ChatViewEffect()
+    object RefreshReadStatus : ChatViewEffect()
     data class ShowRetrySend(val message: String) : ChatViewEffect()
     data class ShowDeleteAt(val messageId: String) : ChatViewEffect()
     data class ShowFailedFetch(val message: String) : ChatViewEffect()
@@ -172,7 +173,7 @@ sealed class ErrorType {
 }
 
 data class ChatViewState(
-    val messages: List<Message>,
+    val messages: List<Pair<String,List<Message>>>,
     val loadType: LoadType,
     val nextPage: Int,
     val currentPage: Int,

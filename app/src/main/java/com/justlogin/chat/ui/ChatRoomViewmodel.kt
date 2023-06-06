@@ -1,14 +1,17 @@
 package com.justlogin.chat.ui
 
 import android.util.Log
+import androidx.compose.runtime.snapshots.readable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.justlogin.chat.data.parameter.CreateChatMemberRequest
+import com.justlogin.chat.data.parameter.Reader
 import com.justlogin.chat.data.parameter.SendMessageRequest
 import com.justlogin.chat.data.parameter.UpdateReadStatusRequest
 import com.justlogin.chat.data.parameter.User
 import com.justlogin.chat.data.preference.AuthManagement
 import com.justlogin.chat.data.response.LeaveChatResponse
+import com.justlogin.chat.data.response.Message
 import com.justlogin.chat.domain.*
 import com.justlogin.chat.module.annnotate.IoDispatcher
 import com.justlogin.chat.ui.mvi.*
@@ -18,8 +21,13 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import timber.log.Timber
+import java.text.SimpleDateFormat
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
+import kotlin.Exception
+
 
 @OptIn(FlowPreview::class)
 class ChatRoomViewmodel @Inject constructor(
@@ -33,8 +41,15 @@ class ChatRoomViewmodel @Inject constructor(
     @IoDispatcher private val dispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
+    val idsMessage: MutableList<String> = mutableListOf()
+    private val listMessages: MutableList<Message> = mutableListOf()
+    private val formatter = "yyyy-MM-dd'T'HH:mm:ss'Z'"
+    private val formatterMillis = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+
     private val _viewEffect = MutableSharedFlow<ChatViewEffect>()
     val viewEffect = _viewEffect.asSharedFlow()
+    private val set = HashSet<String>()
+
     private fun viewEffect(result: ChatResult) {
         viewModelScope.launch {
             when (result) {
@@ -56,6 +71,10 @@ class ChatRoomViewmodel @Inject constructor(
 
                 is ChatResult.UpdateMessage.Error -> {
                     _viewEffect.emit(ChatViewEffect.UpdateMessageAt(messageId = ""))
+                }
+
+                is ChatResult.RefreshResult.Success -> {
+                    _viewEffect.emit(ChatViewEffect.RefreshReadStatus)
                 }
 
                 else -> {
@@ -352,7 +371,7 @@ class ChatRoomViewmodel @Inject constructor(
                 .let(updateMessage),
             sharedFlow
                 .filterIsInstance<ChatAction.RefreshData>()
-                .let(refreshMessage)
+                .let(refreshMessage),
         ).filterIsInstance<ChatResult>()
     }
 
@@ -377,14 +396,32 @@ class ChatRoomViewmodel @Inject constructor(
                         }
 
                         is ChatResult.LoadAllUserResult.Success -> {
-                            prevState.copy(
-                                error = null,
-                                loadType = LoadType.NONE,
-                                messages = result.messages,
-                                isNextPageAvailable = result.isNextPageAvailable,
-                                nextPage = result.nextPage,
-                                currentPage = result.currentPage
-                            )
+                            synchronized(listMessages) {
+                                result.messages.forEach {
+                                    if (set.add(it.messageId)) {
+                                        listMessages.add(it)
+                                    }
+                                }
+                                val sortedMessages = listMessages.sortedBy { message ->
+                                    val time = try {
+                                        SimpleDateFormat(formatterMillis).parse(message.created).time
+                                    } catch (ex: Exception) {
+                                        SimpleDateFormat(formatter).parse(message.created).time
+                                    }
+                                    time
+                                }
+                                val groupedMessages = sortedMessages.groupByDate()
+                                val list: List<Pair<String, List<Message>>> =
+                                    groupedMessages.toList()
+                                prevState.copy(
+                                    error = null,
+                                    loadType = LoadType.NONE,
+                                    messages = list,
+                                    isNextPageAvailable = result.isNextPageAvailable,
+                                    nextPage = result.nextPage,
+                                    currentPage = result.currentPage
+                                )
+                            }
                         }
                     }
                 }
@@ -471,7 +508,6 @@ class ChatRoomViewmodel @Inject constructor(
                 )
 
                 is ChatResult.ReadMessage.Success -> {
-                    Log.e("bambang ","bambang sukses ${result.request.messageIds}")
                     prevState.copy(
                         error = null,
                         readMessageStatusUpdated = result.request.messageIds
@@ -480,11 +516,31 @@ class ChatRoomViewmodel @Inject constructor(
 
                 is ChatResult.RefreshResult.Error -> prevState
                 is ChatResult.RefreshResult.Loading -> prevState
-                is ChatResult.RefreshResult.Success -> prevState.copy(
-                    messages = result.messages,
-                    currentPage = result.currentPage,
-                    isNextPageAvailable = result.isNextPageAvailable
-                )
+                is ChatResult.RefreshResult.Success -> {
+                    synchronized(listMessages) {
+                        result.messages.forEach {
+                            if (set.add(it.messageId)) {
+                                listMessages.add(it)
+                            }
+                        }
+                        val sortedMessages = listMessages.sortedBy { message ->
+                            val time =
+                                try {
+                                    SimpleDateFormat(formatterMillis).parse(message.created).time
+                                } catch (ex: Exception) {
+                                    SimpleDateFormat(formatter).parse(message.created).time
+                                }
+                            time
+                        }
+                        val groupedMessages = sortedMessages.groupByDate()
+                        val list: List<Pair<String, List<Message>>> = groupedMessages.toList()
+                        prevState.copy(
+                            messages = list,
+                            currentPage = result.currentPage,
+                            isNextPageAvailable = result.isNextPageAvailable
+                        )
+                    }
+                }
             }
         }
     }
@@ -510,12 +566,32 @@ class ChatRoomViewmodel @Inject constructor(
         viewModelScope.launch {
             while (true) {
                 delay(TimeUnit.SECONDS.toMillis(5L))
+                Timber.e("JLChatSDK state = refreshing every 5 seconds.....")
                 refreshChat(
                     companyGUID,
                     reportId,
-                    1,//default value to fetch recent messsage
+                    1, //default value to fetch recent messsage
                     noOfPage,
                     chatMembers
+                )
+            }
+        }
+    }
+
+    fun startAutoFetchingRead(
+        companyGUID: String,
+        reportId: String,
+        userGuid: String,
+        fullName: String
+    ) {
+        viewModelScope.launch {
+            while (true) {
+                delay(TimeUnit.SECONDS.toMillis(6L))
+                Timber.e("JLChatSDK state = refreshing read 5 seconds ${idsMessage.joinToString()}")
+                updateReadMessage(
+                    companyGUID, reportId, UpdateReadStatusRequest(
+                        idsMessage, Reader(userGuid, fullName)
+                    )
                 )
             }
         }
@@ -529,8 +605,25 @@ class ChatRoomViewmodel @Inject constructor(
             .onEach(::viewEffect)
             .let(reducer)
             .onEach { newState ->
-                _uiState.value = newState
+                _uiState.apply {
+                    update { newState }
+                }
             }
             .launchIn(viewModelScope)
     }
+
+    private fun List<Message>.groupByDate(): Map<String, List<Message>> {
+        return this.groupBy { message ->
+            SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(
+                try {
+                    SimpleDateFormat(formatterMillis).parse(message.created)
+                } catch (ex: Exception) {
+                    SimpleDateFormat(formatter).parse(message.created)
+                }
+            )
+        }
+    }
+
 }
+
+

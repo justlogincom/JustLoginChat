@@ -1,5 +1,7 @@
 package com.justlogin.chat.data.response
 
+import java.text.SimpleDateFormat
+
 data class LeaveChatResponse(
     val transactionId: String,
     val pageUrl: String,
@@ -13,8 +15,11 @@ data class Message(
     val read: Boolean,
     val created: String,
     val user: User,
-    val reads: List<Any>
-)
+    val reads: List<Any>,
+    var isDifferent : Boolean = false,
+){
+    fun isDifferentUser() = isDifferent
+}
 
 data class User(
     val userGuid: String,
