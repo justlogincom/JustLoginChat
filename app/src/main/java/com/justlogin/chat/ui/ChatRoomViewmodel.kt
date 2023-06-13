@@ -57,6 +57,10 @@ class ChatRoomViewmodel @Inject constructor(
                     _viewEffect.emit(ChatViewEffect.ShowFailedFetch(message = "Failed to get Conversation"))
                 }
 
+                is ChatResult.CreateRoom.Success -> {
+                    _viewEffect.emit(ChatViewEffect.GetInitialMessage)
+                }
+
                 is ChatResult.SendMessage.Error -> {
                     _viewEffect.emit(ChatViewEffect.ShowRetrySend(message = "Failed to send Message"))
                 }
@@ -140,6 +144,34 @@ class ChatRoomViewmodel @Inject constructor(
         }
     }
 
+
+    fun getAllMessage(
+        isInitialLoad: Boolean,
+        companyGUID: String,
+        reportId: String,
+        currentPage: Int,
+        noOfPage: Int,
+        chatMembers: List<String>
+    ) {
+        viewModelScope.launch {
+            intentFlow.emit(
+                ChatIntent.InitialMessage(
+                    isInitial = isInitialLoad,
+                    companyGUID = companyGUID,
+                    reportId = reportId,
+                    currentPage = currentPage,
+                    noOfPage = noOfPage,
+                    CreateChatMemberRequest(
+                        notificationKey = "ExpenseApprovalChat",
+                        chatMembers = chatMembers,
+                        additionalData = Any()
+                    )
+                )
+            )
+        }
+    }
+
+
     fun refreshChat(
         companyGUID: String,
         reportId: String,
@@ -177,6 +209,17 @@ class ChatRoomViewmodel @Inject constructor(
 
                 is ChatIntent.InitialLoad -> {
                     ChatAction.FetchInitialData(
+                        intent.isInitial,
+                        intent.companyGUID,
+                        intent.reportId,
+                        intent.currentPage,
+                        intent.noOfPage,
+                        intent.request
+                    )
+                }
+
+                is ChatIntent.InitialMessage -> {
+                    ChatAction.FetchInitialMessage(
                         intent.isInitial,
                         intent.companyGUID,
                         intent.reportId,
@@ -243,7 +286,7 @@ class ChatRoomViewmodel @Inject constructor(
         }
     }
 
-    private val fetchMessages = { actionFlow: Flow<ChatAction.FetchInitialData> ->
+    private val fetchMessages = { actionFlow: Flow<ChatAction.FetchInitialMessage> ->
         actionFlow.flatMapConcat { action ->
             flow<ChatResult.LoadAllUserResult> {
                 val result: LeaveChatResponse = invokeGetMessages.invoke(
@@ -349,6 +392,13 @@ class ChatRoomViewmodel @Inject constructor(
                 SharingStarted.Eagerly
             )
 
+      val fetchInitialMessage = incomingFlow
+            .filterIsInstance<ChatAction.FetchInitialMessage>()
+            .shareIn(
+                viewModelScope,
+                SharingStarted.Eagerly
+            )
+
         val sendMessageAction = sharedFlow
             .filterIsInstance<ChatAction.SendMessage>()
             .shareIn(
@@ -361,7 +411,7 @@ class ChatRoomViewmodel @Inject constructor(
                 .filterIsInstance<ChatAction.ReadMessage>()
                 .let(readMessage),
             fetchInitial.let(createMember),
-            fetchInitial.let(fetchMessages),
+            fetchInitialMessage.let(fetchMessages),
             sendMessageAction.let(sendMessage),
             sharedFlow
                 .filterIsInstance<ChatAction.DeleteMessage>()
@@ -587,12 +637,14 @@ class ChatRoomViewmodel @Inject constructor(
         viewModelScope.launch {
             while (true) {
                 delay(TimeUnit.SECONDS.toMillis(6L))
-                Timber.e("JLChatSDK state = refreshing read 5 seconds ${idsMessage.joinToString()}")
-                updateReadMessage(
-                    companyGUID, reportId, UpdateReadStatusRequest(
-                        idsMessage, Reader(userGuid, fullName)
+                if(idsMessage.isNotEmpty()) {
+                    Timber.e("JLChatSDK state = refreshing read 5 seconds ${idsMessage.joinToString()}")
+                    updateReadMessage(
+                        companyGUID, reportId, UpdateReadStatusRequest(
+                            idsMessage, Reader(userGuid, fullName)
+                        )
                     )
-                )
+                }
             }
         }
     }

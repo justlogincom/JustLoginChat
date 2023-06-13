@@ -107,6 +107,7 @@ import javax.inject.Inject
 
 class ChatRoomActivity : ComponentActivity() {
 
+
     private val idsSet = HashSet<String>()
 
     private val list: List<Pair<String, Map<String, List<Message>>>> = listOf(
@@ -225,6 +226,9 @@ class ChatRoomActivity : ComponentActivity() {
         )
 
         setContent {
+            var isInitial: Boolean by remember {
+                mutableStateOf(true)
+            }
             AppCompatTheme(content = {
 
                 val scaffoldState = rememberScaffoldState()
@@ -267,6 +271,14 @@ class ChatRoomActivity : ComponentActivity() {
                     ChatViewEffect.RefreshMessageList -> {
                         Timber.e("JLChatSDK state = refreshing after send.....")
                         refreshChat(currentPage)
+                    }
+
+                    ChatViewEffect.GetInitialMessage -> {
+                        if (isInitial) {
+                            isInitial = false
+                            Timber.e("JLChatSDK state = get initial message at $currentPage .....")
+                            requestMessage(true, currentPage)
+                        }
                     }
 
                     ChatViewEffect.RefreshReadStatus -> {
@@ -562,6 +574,17 @@ class ChatRoomActivity : ComponentActivity() {
 
     private fun requestData(isInitialLoad: Boolean, page: Int) {
         viewModel.getAllData(
+            isInitialLoad,
+            parameterData!!.getCompanyId(),
+            parameterData!!.getRoomId(),
+            page,
+            DATA_PER_PAGE,
+            parameterData!!.getParticipantsIds()
+        )
+    }
+
+    private fun requestMessage(isInitialLoad: Boolean, page: Int) {
+        viewModel.getAllMessage(
             isInitialLoad,
             parameterData!!.getCompanyId(),
             parameterData!!.getRoomId(),

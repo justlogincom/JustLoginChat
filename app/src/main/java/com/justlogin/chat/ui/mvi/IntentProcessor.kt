@@ -17,6 +17,15 @@ sealed class ChatIntent {
         val request: CreateChatMemberRequest
     ) : ChatIntent()
 
+    data class InitialMessage(
+        val isInitial: Boolean,
+        val companyGUID: String,
+        val reportId: String,
+        val currentPage: Int,
+        val noOfPage: Int,
+        val request: CreateChatMemberRequest
+    ) : ChatIntent()
+
     data class RefreshPage(
         val companyGUID: String,
         val reportId: String,
@@ -57,6 +66,14 @@ sealed class ChatAction {
     ) : ChatAction()
 
     data class FetchInitialData(
+        val isInitial: Boolean,
+        val companyGUID: String,
+        val reportId: String,
+        val currentPage: Int,
+        val noOfPage: Int,
+        val request: CreateChatMemberRequest
+    ) : ChatAction()
+    data class FetchInitialMessage(
         val isInitial: Boolean,
         val companyGUID: String,
         val reportId: String,
@@ -161,6 +178,7 @@ enum class LoadType {
 sealed class ChatViewEffect {
     object RefreshMessageList : ChatViewEffect()
     object RefreshReadStatus : ChatViewEffect()
+    object GetInitialMessage : ChatViewEffect()
     data class ShowRetrySend(val message: String) : ChatViewEffect()
     data class ShowDeleteAt(val messageId: String) : ChatViewEffect()
     data class ShowFailedFetch(val message: String) : ChatViewEffect()
