@@ -103,6 +103,7 @@ import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
+import java.util.TimeZone
 import javax.inject.Inject
 
 class ChatRoomActivity : ComponentActivity() {
@@ -490,12 +491,18 @@ class ChatRoomActivity : ComponentActivity() {
 
     private val formatter = "yyyy-MM-dd'T'HH:mm:ss'Z'"
     private val formatterMillis = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+
     private fun String.toMillis(): Long {
-        return try {
-            SimpleDateFormat(formatterMillis).parse(this).time
+        val dateFormat = try {
+            SimpleDateFormat(formatterMillis).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }.parse(this).time
         } catch (ex: Exception) {
-            SimpleDateFormat(formatter).parse(this).time
+            SimpleDateFormat(formatter).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }.parse(this).time
         }
+        return dateFormat
     }
 
     @Composable
@@ -790,17 +797,19 @@ class ChatRoomActivity : ComponentActivity() {
         val yesterdayCalendar = Calendar.getInstance().apply {
             add(Calendar.DAY_OF_YEAR, -1)
         }
+        val date = Date(this)
 
         val format = SimpleDateFormat("HH:mm a")
+        format.timeZone = TimeZone.getDefault()
 
         val formattedDate = when {
             isSameDay(this, currentTimeMillis) -> "Today, ${format.format(Date(this))}"
             isSameDay(
                 this,
                 yesterdayCalendar.timeInMillis
-            ) -> "Yesterday, ${format.format(Date(this))}"
+            ) -> "Yesterday, ${format.format(date)}"
 
-            else -> SimpleDateFormat("EEE, dd MMM yyyy").format(Date(this))
+            else -> SimpleDateFormat("EEE, dd MMM yyyy").format(date)
         }
         return formattedDate
     }
