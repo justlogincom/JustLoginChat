@@ -422,7 +422,7 @@ class ChatRoomActivity : ComponentActivity() {
                                     listState = listState,
                                     isNextPageAvailable = uiState.value.isNextPageAvailable
                                 ) {
-                                    requestData(false, uiState.value.nextPage)
+                                    requestMessage(false, uiState.value.nextPage)
                                 }
                             }
                         }
