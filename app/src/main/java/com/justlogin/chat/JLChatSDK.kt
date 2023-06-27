@@ -16,8 +16,9 @@ class JLChatSDK() {
 
     protected var theme: Int? = null
     lateinit var component: JLComponent
-    protected var isDebugable: Boolean = false
+    private var isDebugable: Boolean = false
     private lateinit var SERVER_URL: String
+    internal lateinit var IMAGE_URL: String
     internal lateinit var clientType: ClientType
     protected lateinit var application: Application
 
@@ -56,6 +57,9 @@ class JLChatSDK() {
         if (::SERVER_URL.isInitialized.not()) {
             Log.e(javaClass.simpleName, "Error doesn't Have SERVER_URL")
         }
+        if (::IMAGE_URL.isInitialized.not()) {
+            Log.e(javaClass.simpleName, "Error doesn't Have IMAGE_URL")
+        }
 
         if(::authParameter.isInitialized.not()){
             Log.e(javaClass.simpleName, "Error doesn't valid authenticator")
@@ -83,6 +87,10 @@ class JLChatSDK() {
 
     fun setServerURL(url : String) = apply {
         SERVER_URL = url
+    }
+
+    fun setImageURL(url: String) = apply {
+        IMAGE_URL = url
     }
 
     fun setThemeColor(themeResource: Int) = apply {

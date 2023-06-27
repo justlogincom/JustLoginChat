@@ -11,7 +11,7 @@ sealed class ClientType {
         override val imageBackround: Int
             get() = R.drawable.bg_more_expense
         override val senderChatBackground: String
-            get() = "#EFF9EF"
+            get() = "#82BC00"
         override val receiverChatBackground: String
             get() = "#F5FAF9"
     }

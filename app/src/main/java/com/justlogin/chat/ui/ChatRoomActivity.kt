@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -69,6 +68,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.vectorResource
@@ -77,6 +77,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.constraintlayout.compose.ConstraintLayout
 import coil.annotation.ExperimentalCoilApi
 import coil.compose.ImagePainter
 import coil.compose.rememberImagePainter
@@ -238,9 +239,16 @@ class ChatRoomActivity : ComponentActivity() {
                 val listState = rememberLazyListState()
                 val uiState = viewModel.uiState.collectAsState()
                 val coroutineScope = rememberCoroutineScope()
-                val isScrolling = remember { mutableStateOf(false) }
+                var isFirstMessage = remember { mutableStateOf(false) }
+                var toolBarHeight = remember { mutableStateOf(0) }
+                var inputHeight = remember { mutableStateOf(0) }
 
                 currentPage = uiState.value.currentPage
+                isFirstMessage.value = uiState.value.messages.map {
+                    it.second
+                }.flatten().let {
+                    it.size < 8
+                }
 
                 LaunchedEffect(key1 = true, block = {
                     viewModel.startAutoFetching(
@@ -345,7 +353,10 @@ class ChatRoomActivity : ComponentActivity() {
                                     painterResource(if (isExpense) R.drawable.bg_more_expense else R.drawable.bg_more),
                                     contentScale = ContentScale.Crop,
                                     sizeToIntrinsics = true,
-                                ),
+                                )
+                                .onGloballyPositioned { coordinates ->
+                                    toolBarHeight.value = coordinates.size.height
+                                },
                             backgroundColor = Color.Unspecified,
                             elevation = 0.dp,
                             title = {
@@ -365,16 +376,29 @@ class ChatRoomActivity : ComponentActivity() {
                         )
                     },
                     snackbarHost = { SnackbarHost(hostState = it) }
-                ) {
-                    Column(modifier = Modifier.fillMaxSize()) {
+                ) { parentPadding ->
+                    ConstraintLayout(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = parentPadding.calculateTopPadding())
+                    ) {
+                        val (items, firstLoad, placeholder, loadMore, input) = createRefs()
                         if (uiState.value.loadType == LoadType.LOAD_MORE) {
-                            CircularProgressIndicator(
-                                modifier = Modifier
+                            Column(
+                                Modifier
                                     .wrapContentWidth()
                                     .wrapContentHeight()
-                                    .align(Alignment.CenterHorizontally)
-                                    .padding(16.dp),
-                            )
+                                    .constrainAs(loadMore) {
+                                        top.linkTo(parent.top)
+                                        start.linkTo(parent.start)
+                                        end.linkTo(parent.end)
+                                    }) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterHorizontally)
+                                        .padding(16.dp),
+                                )
+                            }
                         }
 
                         //main screen state [INITIAL LOAD STATE, EMPTY STATE, SHOW DATA]
@@ -382,16 +406,24 @@ class ChatRoomActivity : ComponentActivity() {
                             uiState.value.loadType == LoadType.INITIAL_LOAD -> {
                                 showLoading(
                                     Modifier
-                                        .fillMaxWidth()
-                                        .weight(1f)
-                                )
+                                        .constrainAs(firstLoad) {
+                                            top.linkTo(parent.top)
+                                            start.linkTo(parent.start)
+                                            end.linkTo(parent.end)
+                                            bottom.linkTo(parent.bottom)
+                                        })
                             }
 
                             uiState.value.messages.isEmpty() -> {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.Center,
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier.constrainAs(placeholder) {
+                                        top.linkTo(parent.top)
+                                        start.linkTo(parent.start)
+                                        end.linkTo(parent.end)
+                                        bottom.linkTo(input.top)
+                                    }
                                 ) {
                                     showNoMessage(
                                         Modifier
@@ -403,8 +435,27 @@ class ChatRoomActivity : ComponentActivity() {
                             else -> {
                                 LazyColumn(
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .weight(1f),
+                                        .apply {
+                                            if (isFirstMessage.value) {
+                                                wrapContentHeight(Alignment.Top)
+                                            }
+                                        }
+                                        .constrainAs(items) {
+                                            if (isFirstMessage.value) {
+                                                top.linkTo(parent.top)
+                                                start.linkTo(parent.start)
+                                                end.linkTo(parent.end)
+                                            } else {
+                                                top.linkTo(parent.top)
+                                                start.linkTo(parent.start)
+                                                end.linkTo(parent.end)
+                                                bottom.linkTo(input.top)
+                                            }
+                                        }
+                                        .padding(
+                                            top = 40.dp,
+                                            bottom = 25.dp
+                                        ),
                                     state = listState,
                                     reverseLayout = true,
                                     contentPadding = PaddingValues(
@@ -429,8 +480,15 @@ class ChatRoomActivity : ComponentActivity() {
 
                         Row(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(8.dp),
+                                .constrainAs(input) {
+                                    start.linkTo(parent.start)
+                                    end.linkTo(parent.end)
+                                    bottom.linkTo(parent.bottom)
+                                }
+                                .padding(8.dp)
+                                .onGloballyPositioned { component ->
+                                    inputHeight.value = component.size.height
+                                },
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -698,10 +756,6 @@ class ChatRoomActivity : ComponentActivity() {
                     }
                 }
 
-                listState.OnBottomReached {
-
-                }
-
 
                 Row(
                     modifier = Modifier
@@ -799,7 +853,7 @@ class ChatRoomActivity : ComponentActivity() {
         }
         val date = Date(this)
 
-        val format = SimpleDateFormat("HH:mm a")
+        val format = SimpleDateFormat("hh:mm a")
         format.timeZone = TimeZone.getDefault()
 
         val formattedDate = when {
@@ -809,7 +863,7 @@ class ChatRoomActivity : ComponentActivity() {
                 yesterdayCalendar.timeInMillis
             ) -> "Yesterday, ${format.format(date)}"
 
-            else -> SimpleDateFormat("EEE, dd MMM yyyy").format(date)
+            else -> SimpleDateFormat("EEE, dd MMM yyyy, hh:mm a").format(date)
         }
         return formattedDate
     }
@@ -863,7 +917,7 @@ class ChatRoomActivity : ComponentActivity() {
                                     userId = message.user.userGuid
                                     Text(
                                         modifier = Modifier
-                                            .padding(start = 8.dp, top = 8.dp)
+                                            .padding(start = 38.dp, top = 8.dp)
                                             .align(if (message.isMine()) Alignment.End else Alignment.Start),
                                         text = message.user.fullName,
                                         fontWeight = FontWeight.Bold,
@@ -916,8 +970,14 @@ class ChatRoomActivity : ComponentActivity() {
                 .wrapContentHeight()
         ) {
             Row(modifier = Modifier.align(Alignment.Start)) {
-                CircularAvatar(url = message.user.profileUrl)
-                Spacer(modifier = Modifier.width(8.dp))
+                if (message.showImage) {
+                    CircularAvatar(
+                        url = "${JLChatSDK.getInstance().IMAGE_URL}/size-128/${message.user.userGuid}"
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                } else {
+                    Spacer(modifier = Modifier.width(35.dp))
+                }
                 Message(message = message.messageBody, false)
             }
         }
@@ -999,6 +1059,7 @@ class ChatRoomActivity : ComponentActivity() {
                 .size(32.dp) // Set the desired size for your avatar
                 .clip(CircleShape) // Clip the image in a circle shape
         ) {
+            Timber.tag("JLChatSDK Image").d(url)
             val painter = rememberImagePainter(
                 data = url,
                 builder = {

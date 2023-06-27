@@ -392,7 +392,7 @@ class ChatRoomViewmodel @Inject constructor(
                 SharingStarted.Eagerly
             )
 
-      val fetchInitialMessage = incomingFlow
+        val fetchInitialMessage = incomingFlow
             .filterIsInstance<ChatAction.FetchInitialMessage>()
             .shareIn(
                 viewModelScope,
@@ -463,6 +463,14 @@ class ChatRoomViewmodel @Inject constructor(
                                 val groupedMessages = sortedMessages.groupByDate()
                                 val list: List<Pair<String, List<Message>>> =
                                     groupedMessages.toList()
+                                list.map {
+                                    it.second
+                                }.map { list ->
+                                    list.map { message ->
+                                        val last = list.getLast(message)
+                                        message.showImage = last
+                                    }
+                                }
                                 prevState.copy(
                                     error = null,
                                     loadType = LoadType.NONE,
@@ -637,7 +645,7 @@ class ChatRoomViewmodel @Inject constructor(
         viewModelScope.launch {
             while (true) {
                 delay(TimeUnit.SECONDS.toMillis(6L))
-                if(idsMessage.isNotEmpty()) {
+                if (idsMessage.isNotEmpty()) {
                     Timber.e("JLChatSDK state = refreshing read 5 seconds ${idsMessage.joinToString()}")
                     updateReadMessage(
                         companyGUID, reportId, UpdateReadStatusRequest(
@@ -676,6 +684,16 @@ class ChatRoomViewmodel @Inject constructor(
         }
     }
 
+
+    private fun List<Message>.getLast(message: Message): Boolean {
+        return try {
+            val nextMsg = this[this.indexOf(message) + 1]
+            message.user.userGuid != nextMsg.user.userGuid
+        } catch (ex: Exception) {
+            true
+        }
+    }
 }
+
 
 

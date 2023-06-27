@@ -16,10 +16,9 @@ data class Message(
     val created: String,
     val user: User,
     val reads: List<Any>,
+    var showImage: Boolean = false,
     var isDifferent : Boolean = false,
-){
-    fun isDifferentUser() = isDifferent
-}
+)
 
 data class User(
     val userGuid: String,
