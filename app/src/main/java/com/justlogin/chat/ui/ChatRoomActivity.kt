@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -75,6 +76,7 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.datasource.LoremIpsum
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.constraintlayout.compose.ConstraintLayout
@@ -942,6 +944,27 @@ class ChatRoomActivity : ComponentActivity() {
     }
 
     @Composable
+    @Preview
+    fun ShowMyMessage() {
+        my(
+            message = Message(
+                "2",
+                LoremIpsum(50).values.first(),
+                false,
+                "",
+                com.justlogin.chat.data.response.User(
+                    "dsa",
+                    "Dony",
+                    "https://w7.pngwing.com/pngs/340/946/png-transparent-avatar-user-computer-icons-software-developer-avatar-child-face-heroes-thumbnail.png"
+                ),
+                listOf(),
+                false,
+                false
+            )
+        )
+    }
+
+    @Composable
     private fun my(message: Message) {
         Column(
             horizontalAlignment = Alignment.End,
@@ -950,10 +973,12 @@ class ChatRoomActivity : ComponentActivity() {
                 .wrapContentHeight()
         ) {
             Row(modifier = Modifier.align(Alignment.End)) {
-                if (message.read) {
-                    Readed()
-                } else {
-                    Unreaded()
+                Row(modifier = Modifier.wrapContentSize()) {
+                    if (message.read) {
+                        Readed()
+                    } else {
+                        Unreaded()
+                    }
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Message(message = message.messageBody, true)
@@ -1013,13 +1038,13 @@ class ChatRoomActivity : ComponentActivity() {
             painter = painterResource(R.drawable.ic_check_white),
             contentDescription = "",
             modifier = Modifier.size(18.dp),
-            tint = Color.White,
+            tint = Color.Gray,
         )
     }
 
     @Composable
     fun Readed() {
-        Box() {
+        Box(modifier = Modifier.wrapContentSize()) {
             Icon(
                 painter = painterResource(R.drawable.ic_check_white),
                 contentDescription = "",
