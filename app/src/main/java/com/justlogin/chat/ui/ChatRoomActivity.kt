@@ -282,6 +282,7 @@ class ChatRoomActivity : ComponentActivity() {
                     ChatViewEffect.RefreshMessageList -> {
                         Timber.e("JLChatSDK state = refreshing after send.....")
                         refreshChat(currentPage)
+                        rememberText = ""
                     }
 
                     ChatViewEffect.GetInitialMessage -> {
@@ -339,7 +340,6 @@ class ChatRoomActivity : ComponentActivity() {
 
                     else -> {
                         if (error == null && uiState.value.loadType == LoadType.NONE) {
-                            rememberText = ""
                         }
                     }
                 }
@@ -623,15 +623,15 @@ class ChatRoomActivity : ComponentActivity() {
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = modifier
         ) {
-            Image(
-                modifier = Modifier
-                    .clipToBounds()
-                    .size(108.dp),
-                painter = painterResource(id = R.drawable.ic_message_icon),
-                contentDescription = "",
-                colorFilter = ColorFilter.tint(color = Color.DarkGray)
-            )
-            Spacer(modifier = Modifier.height(4.dp))
+//            Image(
+//                modifier = Modifier
+//                    .clipToBounds()
+//                    .size(108.dp),
+//                painter = painterResource(id = R.drawable.ic_message_icon),
+//                contentDescription = "",
+//                colorFilter = ColorFilter.tint(color = Color.DarkGray)
+//            )
+//            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "No Message",
                 fontSize = 12.sp
