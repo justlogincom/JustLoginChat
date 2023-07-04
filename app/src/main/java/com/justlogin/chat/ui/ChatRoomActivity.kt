@@ -883,9 +883,7 @@ class ChatRoomActivity : ComponentActivity() {
 
     @Composable
     fun ChatBubble(messages: Pair<String, List<Message>>) {
-        var userId by remember {
-            mutableStateOf("")
-        }
+        var userId = ""
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -997,7 +995,7 @@ class ChatRoomActivity : ComponentActivity() {
             Row(modifier = Modifier.align(Alignment.Start)) {
                 if (message.showImage) {
                     CircularAvatar(
-                        url = "${JLChatSDK.getInstance().IMAGE_URL}/size-128/${message.user.userGuid}"
+                        url = message.user.profileUrl
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                 } else {
@@ -1077,44 +1075,36 @@ class ChatRoomActivity : ComponentActivity() {
     @OptIn(ExperimentalCoilApi::class)
     @Composable
     fun CircularAvatar(url: String) {
-        var isLoading by remember { mutableStateOf(true) }
+        var success by remember { mutableStateOf(false) }
 
         Box(
             modifier = Modifier
                 .size(32.dp) // Set the desired size for your avatar
                 .clip(CircleShape) // Clip the image in a circle shape
         ) {
-            Timber.tag("JLChatSDK Image").d(url)
+            Timber.tag("JLChatSDK Image").e(url)
             val painter = rememberImagePainter(
                 data = url,
                 builder = {
-                    // Optional: You can apply transformations to the image if needed
-                    // For example, to crop the image to a circle shape
                     transformations(CircleCropTransformation())
                 }
             )
 
             LaunchedEffect(painter) {
-                // Wait for the image to load
-                isLoading = when (painter.state) {
-                    is ImagePainter.State.Success -> false
-                    is ImagePainter.State.Error -> false
-                    else -> {
-                        true
-                    }
-                }
+                success = painter.state is ImagePainter.State.Success
+                Timber.tag("JLChatSDK Image1").e(url)
             }
-
-            if (isLoading) {
-                // Placeholder image while the actual image is loading
+            Timber.tag("JLChatSDK Image3=${painter.state}").d(url)
+            if (success) {
                 Image(
-                    painter = painterResource(R.drawable.ic_person_circle),
-                    contentDescription = "Placeholder",
+                    painter = painter,
+                    contentDescription = "Avatar",
+                    contentScale = ContentScale.Crop, // Crop the image to fit the circle
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
                 Image(
-                    painter = painter,
+                    painter = painterResource(R.drawable.ic_person_circle),
                     contentDescription = "Avatar",
                     contentScale = ContentScale.Crop, // Crop the image to fit the circle
                     modifier = Modifier.fillMaxSize()
