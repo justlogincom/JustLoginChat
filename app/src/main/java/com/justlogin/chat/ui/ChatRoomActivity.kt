@@ -970,7 +970,7 @@ class ChatRoomActivity : ComponentActivity() {
         ) {
             Row(modifier = Modifier.align(Alignment.End)) {
                 Row(modifier = Modifier.wrapContentSize()) {
-                    if (message.read) {
+                    if (message.reads.isNotEmpty()) {
                         Readed()
                     } else {
                         Unreaded()
@@ -1045,20 +1045,8 @@ class ChatRoomActivity : ComponentActivity() {
                 painter = painterResource(R.drawable.ic_check_white),
                 contentDescription = "",
                 modifier = Modifier.size(18.dp),
-                tint = Color.Blue,
+                tint = Color.Green,
             )
-            Box(
-                modifier = Modifier
-                    .padding(start = 4.dp)
-                    .size(18.dp)
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_check_white),
-                    contentDescription = "",
-                    modifier = Modifier.size(18.dp),
-                    tint = Color.Blue,
-                )
-            }
         }
     }
 
@@ -1084,6 +1072,8 @@ class ChatRoomActivity : ComponentActivity() {
             val painter = rememberImagePainter(
                 data = url,
                 builder = {
+                    placeholder(R.drawable.ic_person_circle)
+                    error(R.drawable.ic_person_circle)
                     transformations(CircleCropTransformation())
                 }
             )
@@ -1093,21 +1083,12 @@ class ChatRoomActivity : ComponentActivity() {
                 Timber.tag("JLChatSDK Image1").e(url)
             }
             Timber.tag("JLChatSDK Image3=${painter.state}").d(url)
-            if (success) {
-                Image(
-                    painter = painter,
-                    contentDescription = "Avatar",
-                    contentScale = ContentScale.Crop, // Crop the image to fit the circle
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Image(
-                    painter = painterResource(R.drawable.ic_person_circle),
-                    contentDescription = "Avatar",
-                    contentScale = ContentScale.Crop, // Crop the image to fit the circle
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+            Image(
+                painter = painter,
+                contentDescription = "Avatar",
+                contentScale = ContentScale.Crop, // Crop the image to fit the circle
+                modifier = Modifier.fillMaxSize()
+            )
         }
     }
 }
