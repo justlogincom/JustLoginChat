@@ -247,7 +247,7 @@ class ChatRoomActivity : ComponentActivity() {
                 isFirstMessage.value = uiState.value.messages.map {
                     it.second
                 }.flatten().let {
-                    it.size < 8
+                    it.size < 4
                 }
 
                 LaunchedEffect(key1 = true, block = {
